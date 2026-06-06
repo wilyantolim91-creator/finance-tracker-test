@@ -215,7 +215,7 @@ function MainApp({currentUser,onLogout}){
   useEffect(()=>{if(proj)loadTxs(proj);},[proj,loadTxs]);
 
   const projData=projects.find(p=>p.name===proj);
-  const txList=transactions[proj]||[];
+  const txList=useMemo(()=>transactions[proj]||[],[transactions,proj]);
   const m=useMemo(()=>computeMetrics(projData?.total_kontrak||0,txList),[projData,txList]);
 
   const handleAdd=async tx=>{try{await db.addTransaction(proj,tx);await loadTxs(proj);}catch(e){alert('Gagal simpan: '+e.message);}};
