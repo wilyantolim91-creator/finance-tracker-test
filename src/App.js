@@ -1,5 +1,4 @@
-import React, { useState, useMemo } from "react";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import {
   Wallet, TrendingDown, TrendingUp, ArrowDownLeft, ArrowUpRight,
   Search, LayoutDashboard, Receipt, Settings, Plus, Filter,
@@ -7,54 +6,14 @@ import {
   Camera, Paperclip, Mic, Edit2, Trash2, FileText, File,
   LogOut, Users, KeyRound, ShieldCheck, Eye,
 } from "lucide-react";
+import { db } from './db';
 
 /* ─────────────────── CONSTANTS ─────────────────── */
-const INITIAL_USERS = {
-  admin: { password: "admin123", role: "admin", assignedProjects: ["KARANTINA 59", "MALL BSCD"] },
-  staff: { password: "staff123", role: "staff", assignedProjects: ["KARANTINA 59"] },
-};
+const KAS_LIST  = ["KAS UTAMA","KAS AWEN","KAS WILY"];
+const REAL_CATS = ["Material","Upah","Labor","Lainnya"];
+const ALL_CATS  = ["Material","Upah","Labor","Lainnya","Transfer","Transfer Internal"];
 
-const SEED = {
-  "KARANTINA 59": {
-    totalKontrak: 79000000,
-    transactions: [
-      { tgl:"2026-04-15", desc:"DP dari klien",             masuk:54000000, keluar:0,       kategori:"Transfer",         kas:"KAS UTAMA", tujuan:"Kas Utama" },
-      { tgl:"2026-04-15", desc:"Afiliasi ke Kas Wily",      masuk:0,        keluar:10000000, kategori:"Transfer",         kas:"KAS UTAMA", tujuan:"Kas Wily" },
-      { tgl:"2026-04-15", desc:"Terima transfer dr UTAMA",  masuk:10000000, keluar:0,        kategori:"Transfer Internal",kas:"KAS WILY",  tujuan:"KAS UTAMA" },
-      { tgl:"2026-06-01", desc:"Transfer ke Kas Awen",      masuk:0,        keluar:15000000, kategori:"Transfer",         kas:"KAS UTAMA", tujuan:"KAS AWEN" },
-      { tgl:"2026-06-01", desc:"Terima transfer dr UTAMA",  masuk:15000000, keluar:0,        kategori:"Transfer Internal",kas:"KAS AWEN",  tujuan:"KAS UTAMA" },
-      { tgl:"2026-02-05", desc:"Beli HPL",                  masuk:0,        keluar:170000,   kategori:"Material",         kas:"KAS WILY",  tujuan:"Supplier" },
-      { tgl:"2026-02-05", desc:"Upah pasang HPL",           masuk:0,        keluar:800000,   kategori:"Upah",             kas:"KAS WILY",  tujuan:"Tukang" },
-      { tgl:"2026-06-11", desc:"Gaji tukang keramik",       masuk:0,        keluar:4000000,  kategori:"Upah",             kas:"KAS WILY",  tujuan:"Tukang Keramik" },
-      { tgl:"2026-06-11", desc:"Gaji tukang keramik 2",     masuk:0,        keluar:4000000,  kategori:"Upah",             kas:"KAS WILY",  tujuan:"Tukang Keramik" },
-      { tgl:"2026-05-20", desc:"Pembelian lem & triplek",   masuk:0,        keluar:1140000,  kategori:"Material",         kas:"KAS AWEN",  tujuan:"Supplier" },
-      { tgl:"2026-05-31", desc:"Upah harian",               masuk:0,        keluar:220000,   kategori:"Upah",             kas:"KAS AWEN",  tujuan:"Tukang" },
-    ],
-  },
-  "MALL BSCD": {
-    totalKontrak: 89000000,
-    transactions: [
-      { tgl:"2026-04-15", desc:"DP",                        masuk:54000000, keluar:0,       kategori:"Transfer",         kas:"KAS UTAMA", tujuan:"Kas Utama" },
-      { tgl:"2026-04-15", desc:"Afiliasi ke Kas Wily",      masuk:0,        keluar:10000000, kategori:"Transfer",         kas:"KAS UTAMA", tujuan:"Kas Wily" },
-      { tgl:"2026-04-15", desc:"Terima transfer dr UTAMA",  masuk:10000000, keluar:0,        kategori:"Transfer Internal",kas:"KAS WILY",  tujuan:"KAS UTAMA" },
-      { tgl:"2026-02-05", desc:"Perabot Lilik",             masuk:0,        keluar:800000,   kategori:"Lainnya",          kas:"KAS WILY",  tujuan:"upah" },
-      { tgl:"2026-02-05", desc:"Beli HPL",                  masuk:0,        keluar:170000,   kategori:"Material",         kas:"KAS WILY",  tujuan:"Supplier" },
-      { tgl:"2026-05-31", desc:"gaji",                      masuk:0,        keluar:110000,   kategori:"Upah",             kas:"KAS AWEN",  tujuan:"upah" },
-      { tgl:"2026-05-31", desc:"gaji 2",                    masuk:0,        keluar:110000,   kategori:"Upah",             kas:"KAS AWEN",  tujuan:"upah" },
-      { tgl:"2026-05-15", desc:"Pembelian Lem",             masuk:0,        keluar:60000,    kategori:"Material",         kas:"KAS AWEN",  tujuan:"Supplier" },
-      { tgl:"2026-10-27", desc:"Triplek",                   masuk:0,        keluar:540000,   kategori:"Material",         kas:"KAS AWEN",  tujuan:"Supplier" },
-      { tgl:"2026-06-11", desc:"Gaji tukang keramik",       masuk:0,        keluar:4000000,  kategori:"Upah",             kas:"KAS WILY",  tujuan:"Tukang Keramik" },
-      { tgl:"2026-06-11", desc:"Gaji tukang keramik 2",     masuk:0,        keluar:4000000,  kategori:"Upah",             kas:"KAS WILY",  tujuan:"Tukang Keramik" },
-    ],
-  },
-};
-
-const ALL_PROJECTS = Object.keys(SEED);
-const KAS_LIST    = ["KAS UTAMA","KAS AWEN","KAS WILY"];
-const REAL_CATS   = ["Material","Upah","Labor","Lainnya"];
-const ALL_CATS    = ["Material","Upah","Labor","Lainnya","Transfer","Transfer Internal"];
-
-const fmt = n => "Rp " + new Intl.NumberFormat("id-ID").format(Math.round(n));
+const fmt  = n => "Rp " + new Intl.NumberFormat("id-ID").format(Math.round(n));
 const fmtS = n => {
   const a = Math.abs(n), s = n < 0 ? "-" : "";
   if (a >= 1e9) return `${s}Rp ${(a/1e9).toFixed(1)}M`;
@@ -74,15 +33,14 @@ function metrics(p) {
   txs.forEach(t=>{ if(REAL_CATS.includes(t.kategori)) perKat[t.kategori]=(perKat[t.kategori]||0)+t.keluar; });
   const totalBiaya = Object.values(perKat).reduce((s,v)=>s+v,0);
   const saldoAkhir = Object.values(perKas).reduce((s,v)=>s+v,0);
-  let run = 0;
-  const trend = txs.map(t=>{ run += t.masuk-t.keluar; return {tgl:t.tgl.slice(5),saldo:run}; });
-  return { totalKontrak:p.totalKontrak, dpMasuk, sisaPembayaran:p.totalKontrak-dpMasuk, perKas, perKat, totalBiaya, saldoAkhir, trend, txs:[...txs].reverse() };
+  return { totalKontrak:p.totalKontrak, dpMasuk, sisaPembayaran:p.totalKontrak-dpMasuk, perKas, perKat, totalBiaya, saldoAkhir };
 }
 
 /* ─────────────────── AI PARSER ─────────────────── */
 const SYS = () => `Kamu parser transaksi keuangan. Hasilkan SATU JSON dari input. Field: tgl (YYYY-MM-DD default ${TODAY()}), desc, masuk (0 jika pengeluaran), keluar (0 jika pemasukan), kategori (${ALL_CATS.join("/")}), kas (${KAS_LIST.join("/")} default KAS UTAMA), tujuan. Konversi jt=1e6 rb=1e3. HANYA JSON.`;
 async function parseAI(content) {
-  const r = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},
+  const r = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",
+    headers:{"Content-Type":"application/json","x-api-key":process.env.REACT_APP_ANTHROPIC_KEY||""},
     body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:500,system:SYS(),messages:[{role:"user",content}]})});
   const d = await r.json();
   const raw = d.content.filter(c=>c.type==="text").map(c=>c.text).join("").replace(/```json|```/g,"").trim();
@@ -159,14 +117,14 @@ function LoginScreen({users,onLogin}) {
           {err && <p className="rounded-lg bg-rose-500/10 p-3 text-xs text-rose-300">{err}</p>}
           <button onClick={go} className="mt-2 w-full rounded-xl bg-gradient-to-r from-sky-400 to-cyan-500 py-2.5 text-sm font-semibold text-slate-950 hover:opacity-90">Masuk</button>
         </div>
-        <p className="mt-6 border-t border-white/10 pt-4 text-center text-xs text-slate-500">Demo: admin/admin123 · staff/staff123</p>
+        <p className="mt-6 border-t border-white/10 pt-4 text-center text-xs text-slate-500">Login dengan akun yang sudah terdaftar</p>
       </div>
     </div>
   );
 }
 
 /* ─────────────────── USER MODAL ─────────────────── */
-function UserModal({title,init,onSave,onClose,isSelf}) {
+function UserModal({title,init,onSave,onClose,isSelf,allProjects}) {
   const [f,setF]=useState(init||{username:"",password:"",role:"staff",assignedProjects:[]});
   const toggle = p => setF(x=>({...x,assignedProjects:x.assignedProjects.includes(p)?x.assignedProjects.filter(q=>q!==p):[...x.assignedProjects,p]}));
   return (
@@ -200,7 +158,7 @@ function UserModal({title,init,onSave,onClose,isSelf}) {
             <div>
               <label className="mb-2 block text-[10px] uppercase tracking-wider text-slate-500">Akses Project</label>
               <div className="space-y-2">
-                {ALL_PROJECTS.map(pr=>(
+                {allProjects.map(pr=>(
                   <label key={pr} className="flex cursor-pointer items-center gap-3 rounded-lg border border-white/10 px-3 py-2.5 hover:bg-white/5">
                     <input type="checkbox" checked={f.assignedProjects.includes(pr)} onChange={()=>toggle(pr)} className="h-4 w-4 accent-cyan-400"/>
                     <span className="text-sm text-slate-200">{pr}</span>
@@ -222,45 +180,60 @@ function UserModal({title,init,onSave,onClose,isSelf}) {
 }
 
 /* ─────────────────── SETTINGS PAGE ─────────────────── */
-function SettingsPage({users,setUsers,currentUser,setCurrentUser}) {
+function SettingsPage({users,setUsers,currentUser,setCurrentUser,allProjects,projectNameToId}) {
   const [addOpen,setAddOpen]=useState(false);
   const [editUser,setEditUser]=useState(null);
   const [toast,setToast]=useState("");
   const showToast = msg => { setToast(msg); setTimeout(()=>setToast(""),2500); };
 
-  const handleAdd = f => {
+  const handleAdd = async f => {
     if(!f.username||!f.password){showToast("Username & password wajib.");return;}
     if(users[f.username]){showToast("Username sudah ada.");return;}
-    setUsers(prev=>({...prev,[f.username]:{password:f.password,role:f.role,assignedProjects:f.assignedProjects}}));
-    showToast(`User "${f.username}" ditambahkan.`);
+    try {
+      const newUser = await db.addUser(f.username, f.password, f.role);
+      const projIds = f.assignedProjects.map(n=>projectNameToId[n]).filter(Boolean);
+      if(projIds.length) await db.setUserProjects(newUser.id, projIds);
+      setUsers(prev=>({...prev,[f.username]:{id:newUser.id,password:f.password,role:f.role,assignedProjects:f.assignedProjects}}));
+      showToast(`User "${f.username}" ditambahkan.`);
+    } catch(e) { showToast("Gagal: "+e.message); }
   };
-  const handleEdit = (uname,f) => {
-    setUsers(prev=>{
-      const updated={...prev[uname]};
-      if(f.password) updated.password=f.password;
-      if(!f.isSelf) updated.role=f.role;
-      updated.assignedProjects=f.assignedProjects;
-      if(uname===currentUser.username) setCurrentUser(u=>({...u,assignedProjects:f.assignedProjects}));
-      return {...prev,[uname]:updated};
-    });
-    showToast(`User "${uname}" diupdate.`);
+
+  const handleEdit = async (uname,f) => {
+    const uid = users[uname].id;
+    try {
+      const updates = {};
+      if(f.password) updates.password = f.password;
+      if(!f.isSelf) updates.role = f.role;
+      if(Object.keys(updates).length) await db.updateUser(uid, updates);
+      const projIds = f.role==="admin" ? [] : f.assignedProjects.map(n=>projectNameToId[n]).filter(Boolean);
+      await db.setUserProjects(uid, projIds);
+      setUsers(prev=>{
+        const updated={...prev[uname],...updates,assignedProjects:f.assignedProjects};
+        if(uname===currentUser.username) setCurrentUser(u=>({...u,...updates,assignedProjects:f.assignedProjects}));
+        return {...prev,[uname]:updated};
+      });
+      showToast(`User "${uname}" diupdate.`);
+    } catch(e) { showToast("Gagal: "+e.message); }
   };
-  const handleDel = uname => {
+
+  const handleDel = async uname => {
     if(uname==="admin"||uname===currentUser.username){showToast("Tidak bisa hapus akun ini.");return;}
-    setUsers(prev=>{const n={...prev};delete n[uname];return n;});
-    showToast(`User "${uname}" dihapus.`);
+    try {
+      await db.deleteUser(users[uname].id);
+      setUsers(prev=>{const n={...prev};delete n[uname];return n;});
+      showToast(`User "${uname}" dihapus.`);
+    } catch(e) { showToast("Gagal: "+e.message); }
   };
 
   return (
     <div className="space-y-5">
       {toast && <div className="fixed bottom-24 left-1/2 z-50 -translate-x-1/2 whitespace-nowrap rounded-xl bg-slate-700 px-5 py-2.5 text-sm text-white shadow-xl">{toast}</div>}
-      {addOpen && <UserModal title="Tambah Staff" onSave={handleAdd} onClose={()=>setAddOpen(false)}/>}
+      {addOpen && <UserModal title="Tambah Staff" onSave={handleAdd} onClose={()=>setAddOpen(false)} allProjects={allProjects}/>}
       {editUser && (
         <UserModal title={`Edit: ${editUser}`} isSelf={editUser===currentUser.username}
           init={{username:editUser,password:"",role:users[editUser].role,assignedProjects:[...users[editUser].assignedProjects]}}
-          onSave={f=>handleEdit(editUser,f)} onClose={()=>setEditUser(null)}/>
+          onSave={f=>handleEdit(editUser,f)} onClose={()=>setEditUser(null)} allProjects={allProjects}/>
       )}
-
       <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-5">
         <div className="mb-3 flex items-center gap-2">
           <KeyRound className="h-4 w-4 text-cyan-400"/>
@@ -276,7 +249,6 @@ function SettingsPage({users,setUsers,currentUser,setCurrentUser}) {
           </button>
         </div>
       </div>
-
       <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-5">
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -291,10 +263,8 @@ function SettingsPage({users,setUsers,currentUser,setCurrentUser}) {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
-                <th className="pb-3 pr-4">Username</th>
-                <th className="pb-3 pr-4">Role</th>
-                <th className="pb-3 pr-4">Akses Project</th>
-                <th className="pb-3 text-center">Aksi</th>
+                <th className="pb-3 pr-4">Username</th><th className="pb-3 pr-4">Role</th>
+                <th className="pb-3 pr-4">Akses Project</th><th className="pb-3 text-center">Aksi</th>
               </tr>
             </thead>
             <tbody>
@@ -314,17 +284,11 @@ function SettingsPage({users,setUsers,currentUser,setCurrentUser}) {
                     </span>
                   </td>
                   <td className="py-3 pr-4">
-                    {ud.role==="admin"
-                      ? <span className="text-xs text-slate-400">Semua project</span>
+                    {ud.role==="admin" ? <span className="text-xs text-slate-400">Semua project</span>
                       : <div className="flex flex-wrap gap-1">
-                          {ud.assignedProjects.length===0
-                            ? <span className="text-xs text-slate-500">Belum ada</span>
-                            : ud.assignedProjects.map(pr=>(
-                                <span key={pr} className="rounded-md bg-sky-400/10 px-2 py-0.5 text-[10px] text-sky-300">{pr}</span>
-                              ))
-                          }
-                        </div>
-                    }
+                          {ud.assignedProjects.length===0 ? <span className="text-xs text-slate-500">Belum ada</span>
+                            : ud.assignedProjects.map(pr=>(<span key={pr} className="rounded-md bg-sky-400/10 px-2 py-0.5 text-[10px] text-sky-300">{pr}</span>))}
+                        </div>}
                   </td>
                   <td className="py-3 text-center">
                     <div className="flex justify-center gap-1">
@@ -403,7 +367,6 @@ function FloatingAI({onAdd}) {
     try{rec.start();setStatus("listening");setNote("");}catch{}
   };
   const stopVoice=()=>{if(recRef.current)try{recRef.current.stop();}catch{}setStatus("");};
-
   return (
     <>
       {!open && (
@@ -454,8 +417,7 @@ function FloatingAI({onAdd}) {
               </label>
               <textarea value={text} onChange={e=>setText(e.target.value)} rows={1}
                 onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();runText(text);}}}
-                placeholder="Ketik…"
-                className="max-h-24 min-h-[36px] flex-1 resize-none rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-cyan-400/50"/>
+                placeholder="Ketik…" className="max-h-24 min-h-[36px] flex-1 resize-none rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-cyan-400/50"/>
               <button onMouseDown={startVoice} onMouseUp={stopVoice} onMouseLeave={stopVoice}
                 onTouchStart={e=>{e.preventDefault();startVoice();}} onTouchEnd={e=>{e.preventDefault();stopVoice();}}
                 className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg border transition ${status==="listening"?"border-cyan-400 bg-cyan-400 text-slate-950":"border-white/10 bg-white/[0.04] text-slate-300"}`}>
@@ -475,38 +437,104 @@ function FloatingAI({onAdd}) {
 
 /* ─────────────────── ROOT ─────────────────── */
 export default function FinanceTracker() {
-  const [users,setUsers]=useState(INITIAL_USERS);
+  const [loading,setLoading]=useState(true);
+  const [dbError,setDbError]=useState("");
+  const [users,setUsers]=useState({});
+  const [data,setData]=useState({});
   const [currentUser,setCurrentUser]=useState(null);
+
+  useEffect(()=>{
+    async function load() {
+      try {
+        const [usersRaw,projectsRaw,txRaw,upRaw] = await Promise.all([
+          db.getUsers(), db.getProjects(), db.getTransactions(), db.getUserProjects()
+        ]);
+        const usersObj={};
+        for(const u of usersRaw){
+          const assignedProjects=upRaw.filter(up=>up.user_id===u.id).map(up=>projectsRaw.find(p=>p.id===up.project_id)?.name).filter(Boolean);
+          usersObj[u.username]={id:u.id,password:u.password,role:u.role,assignedProjects};
+        }
+        const dataObj={};
+        for(const proj of projectsRaw){
+          dataObj[proj.name]={id:proj.id,totalKontrak:proj.total_kontrak,transactions:txRaw.filter(t=>t.project_id===proj.id)};
+        }
+        setUsers(usersObj);
+        setData(dataObj);
+      } catch(e){ setDbError("Gagal koneksi ke database: "+e.message); }
+      finally{ setLoading(false); }
+    }
+    load();
+  },[]);
+
+  if(loading) return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-950">
+      <div className="flex flex-col items-center gap-4">
+        <div className="grid h-12 w-12 place-items-center rounded-xl bg-gradient-to-br from-sky-400 to-cyan-500 text-slate-950"><Wallet className="h-6 w-6"/></div>
+        <div className="flex items-center gap-2 text-slate-400"><Loader2 className="h-4 w-4 animate-spin"/><span className="text-sm">Memuat data…</span></div>
+      </div>
+    </div>
+  );
+
+  if(dbError) return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4">
+      <div className="max-w-md rounded-2xl border border-rose-500/20 bg-rose-500/10 p-6 text-center">
+        <p className="text-sm font-semibold text-rose-300">Koneksi Database Gagal</p>
+        <p className="mt-2 text-xs text-rose-400">{dbError}</p>
+        <button onClick={()=>window.location.reload()} className="mt-4 rounded-xl bg-rose-500 px-4 py-2 text-sm font-semibold text-white">Coba Lagi</button>
+      </div>
+    </div>
+  );
+
   if(!currentUser) return <LoginScreen users={users} onLogin={setCurrentUser}/>;
-  return <MainApp currentUser={currentUser} setCurrentUser={setCurrentUser} users={users} setUsers={setUsers} onLogout={()=>setCurrentUser(null)}/>;
+  return <MainApp currentUser={currentUser} setCurrentUser={setCurrentUser} users={users} setUsers={setUsers} data={data} setData={setData} onLogout={()=>setCurrentUser(null)}/>;
 }
 
 /* ─────────────────── MAIN APP ─────────────────── */
-function MainApp({currentUser,setCurrentUser,users,setUsers,onLogout}) {
-  const [data,setData]=useState(SEED);
+function MainApp({currentUser,setCurrentUser,users,setUsers,data,setData,onLogout}) {
+  const allProjects=Object.keys(data);
+  const projectNameToId=Object.fromEntries(Object.entries(data).map(([name,proj])=>[name,proj.id]));
+
   const [project,setProject]=useState(()=>{
-    const v=ALL_PROJECTS.filter(p=>currentUser.assignedProjects.includes(p));
-    return v[0]||ALL_PROJECTS[0];
+    const isAdmin=currentUser.role==="admin";
+    const vis=isAdmin?allProjects:allProjects.filter(p=>currentUser.assignedProjects.includes(p));
+    return vis[0]||allProjects[0];
   });
   const [tab,setTab]=useState("dashboard");
   const [kasFilter,setKasFilter]=useState("ALL");
   const [search,setSearch]=useState("");
-  const [editIdx,setEditIdx]=useState(null);
+  const [editId,setEditId]=useState(null);
   const [showAdd,setShowAdd]=useState(false);
+  const [toast,setToast]=useState("");
+  const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(""),2500);};
 
   const isAdmin=currentUser.role==="admin";
-  const visProj=ALL_PROJECTS.filter(p=>currentUser.assignedProjects.includes(p));
+  const visProj=isAdmin?allProjects:allProjects.filter(p=>currentUser.assignedProjects.includes(p));
   const proj=visProj.includes(project)?project:visProj[0];
-  const m=useMemo(()=>metrics(data[proj]),[data,proj]);
+  const m=useMemo(()=>proj&&data[proj]?metrics(data[proj]):null,[data,proj]);
 
-  const addTx=tx=>setData(d=>({...d,[proj]:{...d[proj],transactions:[...d[proj].transactions,tx]}}));
-  const saveTx=tx=>{
-    if(editIdx!==null){
-      setData(d=>{const u=[...d[proj].transactions];u[editIdx]=tx;return{...d,[proj]:{...d[proj],transactions:u}};});
-      setEditIdx(null);
-    } else addTx(tx);
-  };
-  const delTx=idx=>setData(d=>({...d,[proj]:{...d[proj],transactions:d[proj].transactions.filter((_,i)=>i!==idx)}}));
+  const addTx=useCallback(async tx=>{
+    try{
+      const newTx=await db.addTransaction(data[proj].id,tx);
+      setData(d=>({...d,[proj]:{...d[proj],transactions:[...d[proj].transactions,newTx]}}));
+    }catch(e){showToast("Gagal simpan: "+e.message);}
+  },[data,proj]);
+
+  const saveTx=useCallback(async tx=>{
+    if(editId){
+      try{
+        await db.updateTransaction(editId,tx);
+        setData(d=>({...d,[proj]:{...d[proj],transactions:d[proj].transactions.map(t=>t.id===editId?{...tx,id:editId}:t)}}));
+        setEditId(null);
+      }catch(e){showToast("Gagal update: "+e.message);}
+    } else { await addTx(tx); }
+  },[editId,proj,addTx]);
+
+  const delTx=useCallback(async id=>{
+    try{
+      await db.deleteTransaction(id);
+      setData(d=>({...d,[proj]:{...d[proj],transactions:d[proj].transactions.filter(t=>t.id!==id)}}));
+    }catch(e){showToast("Gagal hapus: "+e.message);}
+  },[proj]);
 
   const dlXLS=async()=>{
     try{
@@ -543,11 +571,13 @@ function MainApp({currentUser,setCurrentUser,users,setUsers,onLogout}) {
     }catch{alert("Gagal PDF.");}
   };
 
+  if(!proj||!m) return <div className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-400 text-sm">Tidak ada project tersedia.</div>;
+
+  const editTx=editId?data[proj].transactions.find(t=>t.id===editId):null;
   const filtTxs=data[proj].transactions
     .filter(t=>(kasFilter==="ALL"||t.kas===kasFilter)&&t.desc.toLowerCase().includes(search.toLowerCase()))
     .sort((a,b)=>b.tgl.localeCompare(a.tgl));
   const maxKat=Math.max(...Object.values(m.perKat),1);
-
   const navItems=[
     {id:"dashboard",label:"Dashboard",icon:LayoutDashboard},
     {id:"transactions",label:"Transaksi",icon:Receipt},
@@ -558,12 +588,12 @@ function MainApp({currentUser,setCurrentUser,users,setUsers,onLogout}) {
     <div className="min-h-screen w-full bg-slate-950 text-slate-200 antialiased" style={{fontFamily:"'Plus Jakarta Sans',ui-sans-serif,system-ui"}}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');`}</style>
 
-      {isAdmin && <FloatingAI onAdd={addTx}/>}
-      {showAdd && isAdmin && <FormModal title="Tambah Transaksi" onSave={saveTx} onClose={()=>setShowAdd(false)}/>}
-      {editIdx!==null && isAdmin && <FormModal title="Edit Transaksi" transaction={data[proj].transactions[editIdx]} onSave={saveTx} onClose={()=>setEditIdx(null)}/>}
+      {toast&&<div className="fixed bottom-24 left-1/2 z-50 -translate-x-1/2 whitespace-nowrap rounded-xl bg-slate-700 px-5 py-2.5 text-sm text-white shadow-xl">{toast}</div>}
+      {isAdmin&&<FloatingAI onAdd={addTx}/>}
+      {showAdd&&isAdmin&&<FormModal title="Tambah Transaksi" onSave={saveTx} onClose={()=>setShowAdd(false)}/>}
+      {editTx&&isAdmin&&<FormModal title="Edit Transaksi" transaction={editTx} onSave={saveTx} onClose={()=>setEditId(null)}/>}
 
       <div className="flex">
-        {/* SIDEBAR */}
         <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-white/5 bg-slate-950/80 px-4 py-6 lg:flex">
           <div className="mb-8 flex items-center gap-2 px-2">
             <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-sky-400 to-cyan-500 text-slate-950"><Wallet className="h-5 w-5"/></div>
@@ -589,9 +619,7 @@ function MainApp({currentUser,setCurrentUser,users,setUsers,onLogout}) {
           </div>
         </aside>
 
-        {/* MAIN */}
         <main className="min-w-0 flex-1">
-          {/* TOPBAR */}
           <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b border-white/5 bg-slate-950/80 px-5 py-4 backdrop-blur">
             <div className="flex items-center gap-3">
               <Building2 className="h-5 w-5 text-sky-400"/>
@@ -604,35 +632,29 @@ function MainApp({currentUser,setCurrentUser,users,setUsers,onLogout}) {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {isAdmin && (
-                <>
-                  <button onClick={()=>setShowAdd(true)} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-sky-400 to-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:opacity-90">
-                    <Plus className="h-4 w-4"/> Manual
-                  </button>
-                  <button onClick={dlXLS} className="flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-sm font-medium text-slate-300 hover:bg-white/5">
-                    <FileText className="h-4 w-4"/> XLS
-                  </button>
-                  <button onClick={dlPDF} className="flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-sm font-medium text-slate-300 hover:bg-white/5">
-                    <File className="h-4 w-4"/> PDF
-                  </button>
-                </>
-              )}
+              {isAdmin&&(<>
+                <button onClick={()=>setShowAdd(true)} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-sky-400 to-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:opacity-90">
+                  <Plus className="h-4 w-4"/> Manual
+                </button>
+                <button onClick={dlXLS} className="flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-sm font-medium text-slate-300 hover:bg-white/5">
+                  <FileText className="h-4 w-4"/> XLS
+                </button>
+                <button onClick={dlPDF} className="flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-sm font-medium text-slate-300 hover:bg-white/5">
+                  <File className="h-4 w-4"/> PDF
+                </button>
+              </>)}
               <button onClick={onLogout} className="flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-sm font-medium text-slate-300 hover:bg-white/5">
                 <LogOut className="h-4 w-4"/> Keluar
               </button>
             </div>
           </header>
 
-          {/* CONTENT */}
           <div className="px-5 py-6 pb-28">
-
-            {/* ── SETTINGS ── */}
-            {tab==="settings" && isAdmin && (
-              <SettingsPage users={users} setUsers={setUsers} currentUser={currentUser} setCurrentUser={setCurrentUser}/>
+            {tab==="settings"&&isAdmin&&(
+              <SettingsPage users={users} setUsers={setUsers} currentUser={currentUser} setCurrentUser={setCurrentUser} allProjects={allProjects} projectNameToId={projectNameToId}/>
             )}
 
-            {/* ── DASHBOARD ── */}
-            {tab==="dashboard" && (
+            {tab==="dashboard"&&(
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                   <Card label="Total Kontrak" value={fmtS(m.totalKontrak)} sub={fmt(m.totalKontrak)} icon={Wallet} accent="bg-sky-500/30"/>
@@ -659,7 +681,7 @@ function MainApp({currentUser,setCurrentUser,users,setUsers,onLogout}) {
                   </div>
                   <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-5">
                     <p className="mb-4 text-sm font-semibold text-white">Pengeluaran per Kategori</p>
-                    {Object.keys(m.perKat).length===0 && <p className="text-xs text-slate-500">Belum ada pengeluaran.</p>}
+                    {Object.keys(m.perKat).length===0&&<p className="text-xs text-slate-500">Belum ada pengeluaran.</p>}
                     {Object.entries(m.perKat).map(([c,v])=>(
                       <div key={c} className="mb-2.5">
                         <div className="mb-1 flex justify-between text-xs">
@@ -680,8 +702,7 @@ function MainApp({currentUser,setCurrentUser,users,setUsers,onLogout}) {
               </div>
             )}
 
-            {/* ── TRANSACTIONS ── */}
-            {tab==="transactions" && (
+            {tab==="transactions"&&(
               <div className="rounded-2xl border border-white/5 bg-white/[0.03]">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/5 p-4">
                   <p className="text-sm font-semibold text-white">Transaksi <span className="text-slate-500">({filtTxs.length})</span></p>
@@ -706,43 +727,37 @@ function MainApp({currentUser,setCurrentUser,users,setUsers,onLogout}) {
                   <table className="w-full min-w-[640px] text-sm">
                     <thead>
                       <tr className="text-left text-[11px] uppercase tracking-wider text-slate-500">
-                        <th className="px-4 py-2.5">Tanggal</th>
-                        <th className="px-4 py-2.5">Deskripsi</th>
-                        <th className="px-4 py-2.5">Kategori</th>
-                        <th className="px-4 py-2.5">Kas</th>
+                        <th className="px-4 py-2.5">Tanggal</th><th className="px-4 py-2.5">Deskripsi</th>
+                        <th className="px-4 py-2.5">Kategori</th><th className="px-4 py-2.5">Kas</th>
                         <th className="px-4 py-2.5 text-right">Jumlah</th>
-                        {isAdmin && <th className="px-4 py-2.5 text-center">Aksi</th>}
+                        {isAdmin&&<th className="px-4 py-2.5 text-center">Aksi</th>}
                       </tr>
                     </thead>
                     <tbody>
-                      {filtTxs.map((t,i)=>{
-                        const idx=data[proj].transactions.indexOf(t);
-                        return (
-                          <tr key={i} className="border-t border-white/5 hover:bg-white/[0.02]">
-                            <td className="whitespace-nowrap px-4 py-3 text-slate-400">{t.tgl}</td>
-                            <td className="px-4 py-3 font-medium text-slate-200">{t.desc}</td>
-                            <td className="px-4 py-3">
-                              <span className={`rounded-md px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${CAT_CLS[t.kategori]||CAT_CLS.Lainnya}`}>{t.kategori}</span>
+                      {filtTxs.map(t=>(
+                        <tr key={t.id} className="border-t border-white/5 hover:bg-white/[0.02]">
+                          <td className="whitespace-nowrap px-4 py-3 text-slate-400">{t.tgl}</td>
+                          <td className="px-4 py-3 font-medium text-slate-200">{t.desc}</td>
+                          <td className="px-4 py-3">
+                            <span className={`rounded-md px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${CAT_CLS[t.kategori]||CAT_CLS.Lainnya}`}>{t.kategori}</span>
+                          </td>
+                          <td className="px-4 py-3 text-slate-400">{t.kas}</td>
+                          <td className="px-4 py-3 text-right">
+                            {t.masuk>0
+                              ?<span className="inline-flex items-center gap-1 font-semibold tabular-nums text-emerald-400"><ArrowDownLeft className="h-3.5 w-3.5"/>{fmt(t.masuk)}</span>
+                              :<span className="inline-flex items-center gap-1 font-semibold tabular-nums text-rose-400"><ArrowUpRight className="h-3.5 w-3.5"/>{fmt(t.keluar)}</span>}
+                          </td>
+                          {isAdmin&&(
+                            <td className="px-4 py-3 text-center">
+                              <div className="flex justify-center gap-1">
+                                <button onClick={()=>setEditId(t.id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-cyan-300"><Edit2 className="h-4 w-4"/></button>
+                                <button onClick={()=>delTx(t.id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-rose-300"><Trash2 className="h-4 w-4"/></button>
+                              </div>
                             </td>
-                            <td className="px-4 py-3 text-slate-400">{t.kas}</td>
-                            <td className="px-4 py-3 text-right">
-                              {t.masuk>0
-                                ? <span className="inline-flex items-center gap-1 font-semibold tabular-nums text-emerald-400"><ArrowDownLeft className="h-3.5 w-3.5"/>{fmt(t.masuk)}</span>
-                                : <span className="inline-flex items-center gap-1 font-semibold tabular-nums text-rose-400"><ArrowUpRight className="h-3.5 w-3.5"/>{fmt(t.keluar)}</span>
-                              }
-                            </td>
-                            {isAdmin && (
-                              <td className="px-4 py-3 text-center">
-                                <div className="flex justify-center gap-1">
-                                  <button onClick={()=>setEditIdx(idx)} className="rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-cyan-300"><Edit2 className="h-4 w-4"/></button>
-                                  <button onClick={()=>delTx(idx)} className="rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-rose-300"><Trash2 className="h-4 w-4"/></button>
-                                </div>
-                              </td>
-                            )}
-                          </tr>
-                        );
-                      })}
-                      {filtTxs.length===0 && (
+                          )}
+                        </tr>
+                      ))}
+                      {filtTxs.length===0&&(
                         <tr><td colSpan={isAdmin?6:5} className="px-4 py-10 text-center text-slate-500">Tidak ada transaksi.</td></tr>
                       )}
                     </tbody>
@@ -750,19 +765,16 @@ function MainApp({currentUser,setCurrentUser,users,setUsers,onLogout}) {
                 </div>
               </div>
             )}
-
           </div>
         </main>
       </div>
 
-      {/* MOBILE BOTTOM NAV */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-slate-950/95 backdrop-blur lg:hidden">
         <div className="flex">
           {navItems.map(it=>(
             <button key={it.id} onClick={()=>setTab(it.id)}
               className={`flex flex-1 flex-col items-center gap-1 py-3 text-[10px] font-medium transition ${tab===it.id?"text-cyan-400":"text-slate-500"}`}>
-              <it.icon className="h-5 w-5"/>
-              {it.label}
+              <it.icon className="h-5 w-5"/>{it.label}
             </button>
           ))}
         </div>
