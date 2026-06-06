@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
 import { db } from './db';
 import { supabase } from './supabaseConfig';
 
@@ -250,17 +251,209 @@ function MainApp({currentUser,onLogout}){
 
   const dlXLS=()=>{
     const wb=XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([[`Laporan: ${proj}`],[`Tanggal: ${new Date().toLocaleDateString('id-ID')}`],[],['Total Kontrak',m.totalKontrak],['DP Masuk',m.dpMasuk],['Sisa Pembayaran',m.sisaPembayaran],['Total Pengeluaran',m.totalBiaya],['Saldo Akhir',m.saldoAkhir],[],['Saldo per Kas'],...KAS_LIST.map(k=>[k,m.perKas[k]])]),'Summary');
-    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['Tanggal','Deskripsi','Kategori','Kas','Masuk','Keluar','Tujuan'],...txList.map(t=>[t.tgl,t.desc,t.kategori,t.kas,t.masuk,t.keluar,t.tujuan])]),'Transactions');
-    XLSX.writeFile(wb,`${proj}_${TODAY()}.xlsx`);
+    const rows = [];
+    
+    // Row 1: PROJECT: KARANTINA 59
+    rows.push([`PROJECT: ${proj}`]);
+    rows.push([]);
+    
+    // Row 3: REKAPAN PROJECT
+    rows.push(['REKAPAN PROJECT']);
+    // Row 4: Total Kontrak
+    rows.push(['Total Kontrak:', '', '', '', m.totalKontrak]);
+    // Row 5: DP Masuk
+    rows.push(['DP Masuk:', '', '', '', m.dpMasuk]);
+    // Row 6: Sisa Pembayaran Klien
+    rows.push(['Sisa Pembayaran Klien:', '', '', '', m.sisaPembayaran]);
+    
+    rows.push([]);
+    rows.push([]);
+    rows.push([]);
+    
+    // Row 10: SALDO AKHIR
+    rows.push(['SALDO AKHIR:', '', '', '', m.saldoAkhir]);
+    // Row 11: TOTAL PENGELUARAN
+    rows.push(['TOTAL PENGELUARAN:', '', '', '', m.totalBiaya]);
+    
+    rows.push([]);
+    
+    // Row 13: Table Header
+    rows.push([
+      'Tanggal',      // A
+      'Description',  // B
+      'Volume',       // C
+      'Satuan',       // D
+      'Nilai Satuan', // E
+      'Masuk',        // F
+      'Keluar',       // G
+      'Saldo',        // H
+      'Tujuan',       // I
+      'Kategori',     // J
+      'Kas'           // K
+    ]);
+    
+    // Row 14+: Transactions
+    let runningSaldo = 0;
+    const chronologicalTxs = [...txList].sort((a,b)=>a.tgl.localeCompare(b.tgl));
+    
+    chronologicalTxs.forEach(t => {
+      runningSaldo = runningSaldo + t.masuk - t.keluar;
+      rows.push([
+        t.tgl || '',
+        t.desc || '',
+        1,
+        'ls',
+        t.masuk || t.keluar || 0,
+        t.masuk || 0,
+        t.keluar || 0,
+        runningSaldo,
+        t.tujuan || '',
+        t.kategori || '',
+        t.kas || ''
+      ]);
+    });
+    
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    
+    // Set column widths
+    ws['!cols'] = [
+      { wch: 12 }, // A: Tanggal
+      { wch: 30 }, // B: Description
+      { wch: 8 },  // C: Volume
+      { wch: 8 },  // D: Satuan
+      { wch: 15 }, // E: Nilai Satuan
+      { wch: 15 }, // F: Masuk
+      { wch: 15 }, // G: Keluar
+      { wch: 15 }, // H: Saldo
+      { wch: 15 }, // I: Tujuan
+      { wch: 15 }, // J: Kategori
+      { wch: 15 }  // K: Kas
+    ];
+    
+    XLSX.utils.book_append_sheet(wb, ws, proj);
+    XLSX.writeFile(wb, `${proj}_${TODAY()}.xlsx`);
   };
   const dlPDF=()=>{
-    const doc=new jsPDF();let y=15;
-    doc.setFontSize(14);doc.text(`Laporan: ${proj}`,10,y);y+=8;doc.setFontSize(10);doc.text(`Tanggal: ${new Date().toLocaleDateString('id-ID')}`,10,y);y+=8;
-    doc.setFontSize(11);doc.text('Ringkasan',10,y);y+=6;doc.setFontSize(9);
-    [['Total Kontrak',fmt(m.totalKontrak)],['DP Masuk',fmt(m.dpMasuk)],['Sisa Pembayaran',fmt(m.sisaPembayaran)],['Total Pengeluaran',fmt(m.totalBiaya)],['Saldo Akhir',fmt(m.saldoAkhir)]].forEach(([l,v])=>{doc.text(`${l}: ${v}`,10,y);y+=5;});
-    y+=3;doc.setFontSize(11);doc.text('Saldo per Kas',10,y);y+=6;doc.setFontSize(9);KAS_LIST.forEach(k=>{doc.text(`${k}: ${fmt(m.perKas[k])}`,10,y);y+=5;});
-    y+=3;doc.setFontSize(11);doc.text('Pengeluaran per Kategori',10,y);y+=6;doc.setFontSize(9);Object.entries(m.perKat).forEach(([k,v])=>{doc.text(`${k}: ${fmt(v)}`,10,y);y+=5;});
+    const doc=new jsPDF();
+    
+    // Page Title
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.setTextColor(15, 23, 42); // slate-900
+    doc.text(`LAPORAN KEUANGAN: ${proj.toUpperCase()}`, 14, 20);
+    
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139); // slate-500
+    doc.text(`Tanggal Unduh: ${new Date().toLocaleDateString('id-ID')}`, 14, 26);
+    
+    // Divider line
+    doc.setDrawColor(226, 232, 240); // slate-200
+    doc.setLineWidth(0.5);
+    doc.line(14, 30, 196, 30);
+    
+    // Summary Section styled as a clean table (resembling the top section of the spreadsheet)
+    doc.autoTable({
+      startY: 35,
+      theme: 'plain',
+      styles: { fontSize: 10, cellPadding: 3, textColor: [51, 65, 85] },
+      columnStyles: {
+        0: { fontStyle: 'bold', width: 60 },
+        1: { halign: 'right', fontStyle: 'bold', width: 40 }
+      },
+      body: [
+        ['Total Kontrak', fmt(m.totalKontrak)],
+        ['DP Masuk', fmt(m.dpMasuk)],
+        ['Sisa Pembayaran', fmt(m.sisaPembayaran)],
+        ['Total Pengeluaran', fmt(m.totalBiaya)],
+        ['Saldo Akhir', fmt(m.saldoAkhir)]
+      ],
+      didParseCell: (data) => {
+        if (data.row.index === 4) {
+          data.cell.styles.fillColor = [241, 245, 249]; // light gray for Saldo Akhir
+        }
+        if (data.row.index === 2 && m.sisaPembayaran < 0) {
+          data.cell.styles.textColor = [220, 38, 38]; // red for negative balance
+        }
+      }
+    });
+
+    let currentY = doc.lastAutoTable.finalY + 8;
+    
+    // Cash balances and categories in side-by-side columns
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42);
+    doc.text('Saldo per Kas', 14, currentY);
+    doc.text('Pengeluaran per Kategori', 110, currentY);
+    
+    const kasRows = KAS_LIST.map(k=>[k, fmt(m.perKas[k])]);
+    const katRows = Object.entries(m.perKat).map(([k,v])=>[k, fmt(v)]);
+    const maxRows = Math.max(kasRows.length, katRows.length);
+    
+    const summaryBody = [];
+    for (let i = 0; i < maxRows; i++) {
+      const kas = kasRows[i] || ['', ''];
+      const kat = katRows[i] || ['', ''];
+      summaryBody.push([kas[0], kas[1], '', kat[0], kat[1]]);
+    }
+    
+    doc.autoTable({
+      startY: currentY + 3,
+      theme: 'plain',
+      styles: { fontSize: 9, cellPadding: 2.5, textColor: [71, 85, 105] },
+      columnStyles: {
+        0: { width: 40 },
+        1: { halign: 'right', fontStyle: 'bold', width: 35 },
+        2: { width: 20 },
+        3: { width: 45 },
+        4: { halign: 'right', fontStyle: 'bold', width: 35 }
+      },
+      body: summaryBody
+    });
+    
+    currentY = doc.lastAutoTable.finalY + 10;
+    
+    // Transactions Table
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42);
+    doc.text('Daftar Transaksi', 14, currentY);
+    
+    let runningSaldo = 0;
+    const chronologicalTxs = [...txList].sort((a,b)=>a.tgl.localeCompare(b.tgl));
+    
+    const tableBody = chronologicalTxs.map(t => {
+      runningSaldo = runningSaldo + t.masuk - t.keluar;
+      return [
+        t.tgl ? new Date(t.tgl).toLocaleDateString('id-ID') : '', // Tanggal
+        t.desc || '',           // Deskripsi
+        t.kategori || '',       // Kategori
+        t.kas || '',            // Kas
+        t.masuk > 0 ? fmt(t.masuk) : '-',
+        t.keluar > 0 ? fmt(t.keluar) : '-',
+        fmt(runningSaldo)       // Saldo
+      ];
+    }).reverse(); // Latest first in list
+    
+    doc.autoTable({
+      startY: currentY + 3,
+      head: [['Tanggal', 'Deskripsi', 'Kategori', 'Kas', 'Masuk', 'Keluar', 'Saldo']],
+      body: tableBody,
+      theme: 'striped',
+      headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' }, // slate-800
+      styles: { fontSize: 8, cellPadding: 2.5, textColor: [51, 65, 85] },
+      columnStyles: {
+        0: { width: 20, halign: 'center' },
+        1: { width: 52 },
+        2: { width: 25, halign: 'center' },
+        3: { width: 22, halign: 'center' },
+        4: { width: 24, halign: 'right' },
+        5: { width: 24, halign: 'right' },
+        6: { width: 25, halign: 'right' }
+      }
+    });
+    
     doc.save(`${proj}_${TODAY()}.pdf`);
   };
 
