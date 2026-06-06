@@ -38,13 +38,33 @@ function computeMetrics(totalKontrak, txs=[], dpMasukDb=0) {
 /* ─── AI PARSER ─── */
 const SYS=()=>`Kamu parser transaksi keuangan. Hasilkan SATU JSON dari input. Field: tgl(YYYY-MM-DD default ${TODAY()}),desc,masuk(0 jika pengeluaran),keluar(0 jika pemasukan),kategori(${ALL_CATS.join('/')}),kas(${KAS_LIST.join('/')} default KAS UTAMA),tujuan. Konversi jt=1e6 rb=1e3. HANYA JSON.`;
 async function parseAI(content){
-  const apiKey = process.env.REACT_APP_GEMINI_KEY || '';
+  const apiKey = localStorage.getItem('gemini_api_key') || process.env.REACT_APP_GEMINI_KEY || '';
   if (!apiKey) {
-    throw new Error('Gemini API Key tidak terkonfigurasi. Silakan isi REACT_APP_GEMINI_KEY di settings.');
+    throw new Error('Gemini API Key tidak terkonfigurasi. Silakan isi API Key di Settings.');
   }
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  
+  let parts = [];
+  if (typeof content === 'string') {
+    parts = [{ text: content }];
+  } else if (Array.isArray(content)) {
+    parts = content.map(item => {
+      if (item.type === 'text') {
+        return { text: item.text };
+      } else if (item.type === 'image') {
+        return {
+          inlineData: {
+            mimeType: item.source.media_type,
+            data: item.source.data
+          }
+        };
+      }
+      return item;
+    });
+  }
+
   const payload = {
-    contents: [{ parts: [{ text: content }] }],
+    contents: [{ parts }],
     systemInstruction: { parts: [{ text: SYS() }] },
     generationConfig: { responseMimeType: "application/json" }
   };
@@ -125,7 +145,12 @@ function UserModal({title,init,allProjects,onSave,onClose,isSelf}){
 /* ─── SETTINGS PAGE ─── */
 function SettingsPage({users,allProjects,currentUser,onUsersChange}){
   const[addOpen,setAddOpen]=useState(false);const[editUser,setEditUser]=useState(null);const[toast,setToast]=useState('');
+  const [geminiKey, setGeminiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
   const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(''),2500);};
+  const saveGeminiKey = () => {
+    localStorage.setItem('gemini_api_key', geminiKey.trim());
+    showToast('Gemini API Key berhasil disimpan.');
+  };
   const handleAdd=async f=>{if(!f.username||!f.password){showToast('Username & password wajib.');return;}if(users.find(u=>u.username===f.username)){showToast('Username sudah ada.');return;}try{const newU=await db.addUser(f.username,f.password,f.role);await db.setUserProjects(newU.id,f.role==='admin'?[]:f.assignedProjects);onUsersChange();showToast(`User "${f.username}" ditambahkan.`);}catch(e){showToast('Gagal: '+e.message);}};
   const handleEdit=async(uid,uname,f)=>{try{const upd={role:f.isSelf?undefined:f.role};if(f.password)upd.password=f.password;Object.keys(upd).forEach(k=>upd[k]===undefined&&delete upd[k]);if(Object.keys(upd).length>0)await db.updateUser(uid,upd);if(!f.isSelf||f.role!=='admin')await db.setUserProjects(uid,f.role==='admin'?[]:f.assignedProjects);onUsersChange();showToast(`User "${uname}" diupdate.`);}catch(e){showToast('Gagal: '+e.message);}};
   const handleDel=async(uid,uname)=>{if(uname==='admin'||uname===currentUser.username){showToast('Tidak bisa hapus akun ini.');return;}try{await db.deleteUser(uid);onUsersChange();showToast(`User "${uname}" dihapus.`);}catch(e){showToast('Gagal: '+e.message);}};
@@ -138,6 +163,27 @@ function SettingsPage({users,allProjects,currentUser,onUsersChange}){
       <div className="flex items-center justify-between">
         <div><p className="text-sm font-medium text-white">{currentUser.username}</p><p className="mt-0.5 text-xs capitalize text-slate-400">{currentUser.role}</p></div>
         <button onClick={()=>setEditUser(users.find(u=>u.id===currentUser.id))} className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/10"><KeyRound className="h-3.5 w-3.5"/> Ganti Password</button>
+      </div>
+    </div>
+    <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-5">
+      <div className="mb-3 flex items-center gap-2"><Sparkles className="h-4 w-4 text-cyan-400"/><span className="text-sm font-semibold text-white">Konfigurasi AI Assistant</span></div>
+      <div className="space-y-3">
+        <p className="text-xs text-slate-400">Masukkan Gemini API Key Anda untuk mengaktifkan fitur Asisten AI. Kunci ini akan disimpan secara lokal di browser Anda.</p>
+        <div className="flex gap-2">
+          <input
+            type="password"
+            placeholder="AIzaSy..."
+            value={geminiKey}
+            onChange={e=>setGeminiKey(e.target.value)}
+            className="flex-1 rounded-lg border border-white/10 bg-slate-800 px-3 py-1.5 text-xs text-white placeholder-slate-500 outline-none focus:border-cyan-400/40"
+          />
+          <button
+            onClick={saveGeminiKey}
+            className="rounded-lg bg-gradient-to-r from-sky-400 to-cyan-500 px-4 py-1.5 text-xs font-semibold text-slate-950 hover:opacity-90"
+          >
+            Simpan Key
+          </button>
+        </div>
       </div>
     </div>
     <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-5">
@@ -182,8 +228,8 @@ function FormModal({title,transaction,onSave,onClose}){
 function FloatingAI({onAdd}){
   const[open,setOpen]=useState(false);const[text,setText]=useState('');const[status,setStatus]=useState('');const[parsed,setParsed]=useState(null);const[note,setNote]=useState('');const recRef=React.useRef(null);
   const reset=()=>{setParsed(null);setNote('');setStatus('');};
-  const runText=async t=>{if(!t.trim())return;setStatus('thinking');setParsed(null);setNote('');try{setParsed(await parseAI(t));}catch{setNote('Gagal memproses.');}finally{setStatus('');setText('');}};
-  const runImg=async file=>{if(!file)return;setStatus('thinking');setParsed(null);setNote('');try{const b64=await toB64(file);setParsed(await parseAI([{type:'image',source:{type:'base64',media_type:file.type||'image/jpeg',data:b64}},{type:'text',text:'Ekstrak transaksi dari nota ini.'}]));}catch{setNote('Gagal membaca file.');}finally{setStatus('');}};
+  const runText=async t=>{if(!t.trim())return;setStatus('thinking');setParsed(null);setNote('');try{setParsed(await parseAI(t));}catch(err){setNote(err.message||'Gagal memproses.');}finally{setStatus('');setText('');}};
+  const runImg=async file=>{if(!file)return;setStatus('thinking');setParsed(null);setNote('');try{const b64=await toB64(file);setParsed(await parseAI([{type:'image',source:{type:'base64',media_type:file.type||'image/jpeg',data:b64}},{type:'text',text:'Ekstrak transaksi dari nota ini.'}]));}catch(err){setNote(err.message||'Gagal membaca file.');}finally{setStatus('');}};
   const startVoice=()=>{const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){setNote('Browser belum support rekam suara.');return;}const rec=new SR();rec.lang='id-ID';rec.continuous=false;rec.onresult=e=>setText(Array.from(e.results).map(r=>r[0].transcript).join(''));rec.onend=()=>setStatus('');recRef.current=rec;try{rec.start();setStatus('listening');setNote('');}catch{}};
   const stopVoice=()=>{if(recRef.current)try{recRef.current.stop();}catch{}setStatus('');};
   return(<>
