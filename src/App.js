@@ -6,6 +6,8 @@ import {
   Camera, Paperclip, Mic, Edit2, Trash2, FileText, File,
   LogOut, Users, KeyRound, ShieldCheck, Eye,
 } from "lucide-react";
+import * as XLSX from 'xlsx';
+import { jsPDF } from 'jspdf';
 import { db } from './db';
 
 /* ─────────────────── CONSTANTS ─────────────────── */
@@ -538,25 +540,23 @@ function MainApp({currentUser,setCurrentUser,users,setUsers,data,setData,onLogou
 
   const dlXLS=async()=>{
     try{
-      const X=await import('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm').then(m=>m.default);
-      const wb=X.utils.book_new();
-      X.utils.book_append_sheet(wb,X.utils.aoa_to_sheet([
+      const wb=XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([
         [`Laporan: ${proj}`],[`Tanggal: ${new Date().toLocaleDateString("id-ID")}`],[],
         ["Total Kontrak",m.totalKontrak],["DP Masuk",m.dpMasuk],["Sisa Pembayaran",m.sisaPembayaran],
         ["Total Pengeluaran",m.totalBiaya],["Saldo Akhir",m.saldoAkhir],[],
         ["Saldo per Kas"],...KAS_LIST.map(k=>[k,m.perKas[k]]),[],
         ["Per Kategori"],...Object.entries(m.perKat).map(([k,v])=>[k,v]),
       ]),"Summary");
-      X.utils.book_append_sheet(wb,X.utils.aoa_to_sheet([
+      XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([
         ["Tanggal","Deskripsi","Kategori","Kas","Masuk","Keluar","Tujuan"],
         ...data[proj].transactions.map(t=>[t.tgl,t.desc,t.kategori,t.kas,t.masuk,t.keluar,t.tujuan]),
       ]),"Transactions");
-      X.writeFile(wb,`${proj}_${TODAY()}.xlsx`);
+      XLSX.writeFile(wb,`${proj}_${TODAY()}.xlsx`);
     }catch{alert("Gagal XLS.");}
   };
   const dlPDF=async()=>{
     try{
-      const {jsPDF}=await import('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/+esm');
       const doc=new jsPDF();let y=15;
       doc.setFontSize(14);doc.text(`Laporan: ${proj}`,10,y);y+=8;
       doc.setFontSize(10);doc.text(`Tanggal: ${new Date().toLocaleDateString("id-ID")}`,10,y);y+=8;
