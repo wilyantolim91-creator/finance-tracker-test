@@ -28,6 +28,28 @@ BEGIN
 END
 $$;
 
+-- ************************************************************
+-- 0b. Tambah kolom `sheet_gid` pada tabel `projects`
+--    - sheet_gid: ID tab unik Google Sheets (untuk export langsung ke XLS)
+-- ************************************************************
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name   = 'projects'
+          AND column_name  = 'sheet_gid'
+    ) THEN
+        ALTER TABLE public.projects
+            ADD COLUMN sheet_gid TEXT;
+
+        RAISE NOTICE 'Kolom sheet_gid berhasil ditambahkan ke projects.';
+    ELSE
+        RAISE NOTICE 'Kolom sheet_gid sudah ada, dilewati.';
+    END IF;
+END
+$$;
+
 
 -- ************************************************************
 -- 1. Tambah kolom sync pada tabel `transactions`

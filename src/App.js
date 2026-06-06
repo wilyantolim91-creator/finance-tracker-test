@@ -250,6 +250,12 @@ function MainApp({currentUser,onLogout}){
   const handleDelete=async id=>{if(!window.confirm('Hapus transaksi ini?'))return;try{await db.deleteTransaction(id);await loadTxs(proj);}catch(e){alert('Gagal hapus: '+e.message);}};
 
   const dlXLS=()=>{
+    if (projData?.sheet_gid) {
+      const url = `https://docs.google.com/spreadsheets/d/1zdA8vm_aBmSXkVPXWZces2pfKfBDS0WtKbfSYAozDEs/export?format=xlsx&gid=${projData.sheet_gid}`;
+      window.open(url, '_blank');
+      return;
+    }
+
     const wb=XLSX.utils.book_new();
     const rows = [];
     
