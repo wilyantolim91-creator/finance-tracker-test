@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from './supabaseConfig';
 
 function App() {
   const [transactions, setTransactions] = useState([
@@ -8,6 +9,23 @@ function App() {
   const [newDesc, setNewDesc] = useState('');
   const [newAmount, setNewAmount] = useState('');
   const [newType, setNewType] = useState('expense');
+  const [supabaseConnected, setSupabaseConnected] = useState(false);
+
+  // Check Supabase connection
+  useEffect(() => {
+    const checkSupabase = async () => {
+      try {
+        const { data, error } = await supabase.from('transactions').select('count', { count: 'exact', head: true })
+        if (!error) {
+          setSupabaseConnected(true)
+          console.log('✅ Supabase connected!')
+        }
+      } catch (err) {
+        console.log('Supabase connection pending - using local state')
+      }
+    }
+    checkSupabase()
+  }, [])
 
   const addTransaction = () => {
     if (!newDesc || !newAmount) return;
@@ -51,10 +69,23 @@ function App() {
         padding: '20px',
         borderRadius: '12px',
         marginBottom: '20px',
-        textAlign: 'center'
+        textAlign: 'center',
+        position: 'relative'
       }}>
         <h1 style={{ margin: '0 0 10px 0' }}>💰 Finance Tracker</h1>
-        <p style={{ margin: 0, fontSize: '14px', opacity: 0.9 }}>Simple Test App</p>
+        <p style={{ margin: 0, fontSize: '14px', opacity: 0.9 }}>Simple Test App with Supabase Backend</p>
+        <div style={{
+          position: 'absolute',
+          top: '10px',
+          right: '10px',
+          fontSize: '12px',
+          background: supabaseConnected ? '#27ae60' : '#f39c12',
+          padding: '4px 8px',
+          borderRadius: '4px',
+          color: 'white'
+        }}>
+          {supabaseConnected ? '✅ Supabase: Connected' : '⏳ Supabase: Connecting...'}
+        </div>
       </div>
 
       {/* Summary Cards */}
