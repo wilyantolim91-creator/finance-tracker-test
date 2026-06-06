@@ -38,13 +38,37 @@ function computeMetrics(totalKontrak, txs=[], dpMasukDb=0) {
 /* ─── AI PARSER ─── */
 const SYS=()=>`Kamu parser transaksi keuangan. Hasilkan SATU JSON dari input. Field: tgl(YYYY-MM-DD default ${TODAY()}),desc,masuk(0 jika pengeluaran),keluar(0 jika pemasukan),kategori(${ALL_CATS.join('/')}),kas(${KAS_LIST.join('/')} default KAS UTAMA),tujuan. Konversi jt=1e6 rb=1e3. HANYA JSON.`;
 async function parseAI(content){
-  const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:500,system:SYS(),messages:[{role:'user',content}]})});
-  const d=await r.json();
-  const raw=d.content.filter(c=>c.type==='text').map(c=>c.text).join('').replace(/```json|```/g,'').trim();
-  const o=JSON.parse(raw);
-  return{tgl:o.tgl||TODAY(),desc:o.desc||'',masuk:Number(o.masuk)||0,keluar:Number(o.keluar)||0,
-    kategori:ALL_CATS.includes(o.kategori)?o.kategori:'Lainnya',kas:KAS_LIST.includes(o.kas)?o.kas:'KAS UTAMA',tujuan:o.tujuan||''};
+  const apiKey = process.env.REACT_APP_GEMINI_KEY || '';
+  if (!apiKey) {
+    throw new Error('Gemini API Key tidak terkonfigurasi. Silakan isi REACT_APP_GEMINI_KEY di settings.');
+  }
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  const payload = {
+    contents: [{ parts: [{ text: content }] }],
+    systemInstruction: { parts: [{ text: SYS() }] },
+    generationConfig: { responseMimeType: "application/json" }
+  };
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!r.ok) {
+    const errText = await r.text();
+    throw new Error(`Gemini API Error: ${errText}`);
+  }
+  const d = await r.json();
+  const raw = d.candidates[0].content.parts[0].text.trim();
+  const o = JSON.parse(raw);
+  return {
+    tgl: o.tgl || TODAY(),
+    desc: o.desc || '',
+    masuk: Number(o.masuk) || 0,
+    keluar: Number(o.keluar) || 0,
+    kategori: ALL_CATS.includes(o.kategori) ? o.kategori : 'Lainnya',
+    kas: KAS_LIST.includes(o.kas) ? o.kas : 'KAS UTAMA',
+    tujuan: o.tujuan || ''
+  };
 }
 const toB64=f=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(f);});
 
