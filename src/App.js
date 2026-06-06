@@ -65,8 +65,8 @@ async function parseAI(content){
 
   const payload = {
     contents: [{ parts }],
-    systemInstruction: { parts: [{ text: SYS() }] },
-    generationConfig: { responseMimeType: "application/json" }
+    system_instruction: { parts: [{ text: SYS() }] },
+    generation_config: { response_mime_type: "application/json" }
   };
   const r = await fetch(url, {
     method: 'POST',
