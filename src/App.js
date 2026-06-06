@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import { db } from './db';
 import { supabase } from './supabaseConfig';
 
@@ -253,27 +253,33 @@ function MainApp({currentUser,onLogout}){
     const wb=XLSX.utils.book_new();
     const rows = [];
     
+    // Helper to format cells with thousands separator and write formulas
+    const numCell = (val) => ({ v: Number(val) || 0, t: 'n', z: '#,##0' });
+    const formulaCell = (formula) => ({ f: formula, t: 'n', z: '#,##0' });
+
     // Row 1: PROJECT: KARANTINA 59
     rows.push([`PROJECT: ${proj}`]);
     rows.push([]);
     
     // Row 3: REKAPAN PROJECT
     rows.push(['REKAPAN PROJECT']);
-    // Row 4: Total Kontrak
-    rows.push(['Total Kontrak:', '', '', '', m.totalKontrak]);
-    // Row 5: DP Masuk
-    rows.push(['DP Masuk:', '', '', '', m.dpMasuk]);
-    // Row 6: Sisa Pembayaran Klien
-    rows.push(['Sisa Pembayaran Klien:', '', '', '', m.sisaPembayaran]);
+    // Row 4: Total Kontrak (E4)
+    rows.push(['Total Kontrak:', '', '', '', numCell(m.totalKontrak)]);
+    // Row 5: DP Masuk (E5)
+    rows.push(['DP Masuk:', '', '', '', numCell(m.dpMasuk)]);
+    // Row 6: Sisa Pembayaran Klien (E6 = E4-E5)
+    rows.push(['Sisa Pembayaran Klien:', '', '', '', formulaCell('E4-E5')]);
     
     rows.push([]);
     rows.push([]);
     rows.push([]);
     
-    // Row 10: SALDO AKHIR
-    rows.push(['SALDO AKHIR:', '', '', '', m.saldoAkhir]);
-    // Row 11: TOTAL PENGELUARAN
-    rows.push(['TOTAL PENGELUARAN:', '', '', '', m.totalBiaya]);
+    // Row 10: SALDO AKHIR (E10 = E5 - E11)
+    rows.push(['SALDO AKHIR:', '', '', '', formulaCell('E5-E11')]);
+    // Row 11: TOTAL PENGELUARAN (E11 = SUM(G14:G[lastRow]))
+    const lastRowIdx = 13 + txList.length;
+    const totalPengeluaranFormula = txList.length > 0 ? `SUM(G14:G${lastRowIdx})` : '0';
+    rows.push(['TOTAL PENGELUARAN:', '', '', '', formulaCell(totalPengeluaranFormula)]);
     
     rows.push([]);
     
@@ -293,20 +299,26 @@ function MainApp({currentUser,onLogout}){
     ]);
     
     // Row 14+: Transactions
-    let runningSaldo = 0;
     const chronologicalTxs = [...txList].sort((a,b)=>a.tgl.localeCompare(b.tgl));
     
-    chronologicalTxs.forEach(t => {
-      runningSaldo = runningSaldo + t.masuk - t.keluar;
+    chronologicalTxs.forEach((t, index) => {
+      const currentRow = 14 + index;
+      let saldoFormula;
+      if (index === 0) {
+        saldoFormula = `F${currentRow}-G${currentRow}`;
+      } else {
+        saldoFormula = `H${currentRow-1}+F${currentRow}-G${currentRow}`;
+      }
+      
       rows.push([
         t.tgl || '',
         t.desc || '',
         1,
         'ls',
-        t.masuk || t.keluar || 0,
-        t.masuk || 0,
-        t.keluar || 0,
-        runningSaldo,
+        numCell(t.masuk || t.keluar || 0),
+        numCell(t.masuk || 0),
+        numCell(t.keluar || 0),
+        formulaCell(saldoFormula),
         t.tujuan || '',
         t.kategori || '',
         t.kas || ''
@@ -353,7 +365,7 @@ function MainApp({currentUser,onLogout}){
     doc.line(14, 30, 196, 30);
     
     // Summary Section styled as a clean table (resembling the top section of the spreadsheet)
-    doc.autoTable({
+    autoTable(doc, {
       startY: 35,
       theme: 'plain',
       styles: { fontSize: 10, cellPadding: 3, textColor: [51, 65, 85] },
@@ -398,7 +410,7 @@ function MainApp({currentUser,onLogout}){
       summaryBody.push([kas[0], kas[1], '', kat[0], kat[1]]);
     }
     
-    doc.autoTable({
+    autoTable(doc, {
       startY: currentY + 3,
       theme: 'plain',
       styles: { fontSize: 9, cellPadding: 2.5, textColor: [71, 85, 105] },
@@ -436,7 +448,7 @@ function MainApp({currentUser,onLogout}){
       ];
     }).reverse(); // Latest first in list
     
-    doc.autoTable({
+    autoTable(doc, {
       startY: currentY + 3,
       head: [['Tanggal', 'Deskripsi', 'Kategori', 'Kas', 'Masuk', 'Keluar', 'Saldo']],
       body: tableBody,
