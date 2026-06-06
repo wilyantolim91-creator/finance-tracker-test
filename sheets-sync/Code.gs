@@ -832,15 +832,15 @@ function computeHash(txData) {
  */
 function getProjectId(name) {
   // Cek cache dulu
-  if (_projectCache[name]) return _projectCache[name];
+  if (_projectCache[name]) return _projectCache[name].id;
 
   const result = supaFetch(
-    `/rest/v1/projects?name=eq.${encodeURIComponent(name)}&select=id`,
+    `/rest/v1/projects?name=eq.${encodeURIComponent(name)}&select=id,total_kontrak`,
     'GET'
   );
 
   if (result && result.length > 0) {
-    _projectCache[name] = result[0].id;
+    _projectCache[name] = result[0];
     return result[0].id;
   }
 
@@ -849,6 +849,7 @@ function getProjectId(name) {
 
 /**
  * Mendapatkan UUID proyek yang sudah ada, atau membuat proyek baru di Supabase.
+ * Jika proyek sudah ada tetapi total kontraknya berbeda, perbarui di Supabase.
  *
  * @param {string} name — Nama proyek (= nama sheet)
  * @param {number} kontrak — Nilai total kontrak
@@ -857,7 +858,19 @@ function getProjectId(name) {
 function getOrCreateProject(name, kontrak) {
   // Coba dapatkan yang sudah ada
   let projectId = getProjectId(name);
-  if (projectId) return projectId;
+  if (projectId) {
+    const cachedProj = _projectCache[name];
+    const targetKontrak = kontrak || 0;
+    if (cachedProj && Number(cachedProj.total_kontrak) !== Number(targetKontrak)) {
+      Logger.log(`🔄 Memperbarui total kontrak proyek "${name}" dari Rp ${cachedProj.total_kontrak} ke Rp ${targetKontrak}`);
+      supaFetch(`/rest/v1/projects?id=eq.${projectId}`, 'PATCH', {
+        total_kontrak: targetKontrak
+      });
+      // Perbarui cache
+      cachedProj.total_kontrak = targetKontrak;
+    }
+    return projectId;
+  }
 
   // Buat proyek baru
   Logger.log(`🆕 Membuat proyek baru di Supabase: "${name}"`);
@@ -867,7 +880,7 @@ function getOrCreateProject(name, kontrak) {
   }, { prefer: 'return=representation' });
 
   if (result && result.length > 0) {
-    _projectCache[name] = result[0].id;
+    _projectCache[name] = result[0];
     Logger.log(`✅ Proyek "${name}" berhasil dibuat: ${result[0].id}`);
     return result[0].id;
   }
