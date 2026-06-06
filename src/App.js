@@ -227,6 +227,17 @@ function MainApp({currentUser,onLogout}){
     return()=>{supabase.removeChannel(channel);};
   },[proj,loadTxs]);
 
+  // ── Realtime subscription: auto-update when projects change ──
+  useEffect(()=>{
+    const channel=supabase
+      .channel('projects-realtime')
+      .on('postgres_changes',{event:'*',schema:'public',table:'projects'},()=>{
+        loadAll();
+      })
+      .subscribe();
+    return()=>{supabase.removeChannel(channel);};
+  },[loadAll]);
+
   const projData=projects.find(p=>p.name===proj);
   const txList=useMemo(()=>transactions[proj]||[],[transactions,proj]);
   const m=useMemo(()=>computeMetrics(projData?.total_kontrak||0,txList),[projData,txList]);
@@ -283,6 +294,7 @@ function MainApp({currentUser,onLogout}){
           </div>
           <div className="flex items-center gap-2">
             {isAdmin&&<><button onClick={()=>setShowAdd(true)} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-sky-400 to-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:opacity-90"><Plus className="h-4 w-4"/> Manual</button><button onClick={dlXLS} className="flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-sm font-medium text-slate-300 hover:bg-white/5"><FileText className="h-4 w-4"/> XLS</button><button onClick={dlPDF} className="flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-sm font-medium text-slate-300 hover:bg-white/5"><File className="h-4 w-4"/> PDF</button></>}
+            <div className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-400"><span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"/><span>Synced</span><RefreshCw className="h-3 w-3 ml-1"/></div>
             <button onClick={onLogout} className="flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-sm font-medium text-slate-300 hover:bg-white/5"><LogOut className="h-4 w-4"/> Keluar</button>
           </div>
         </header>
@@ -329,7 +341,7 @@ function MainApp({currentUser,onLogout}){
                 <tbody>
                   {filtTxs.map((t,i)=>(<tr key={t.id||i} className="border-t border-white/5 hover:bg-white/[0.02]">
                     <td className="whitespace-nowrap px-4 py-3 text-slate-400">{t.tgl}</td>
-                    <td className="px-4 py-3 font-medium text-slate-200">{t.desc}</td>
+                    <td className="px-4 py-3 font-medium text-slate-200"><div className="flex items-center gap-1.5">{t.desc}{t.sync_source === 'sheet' && <span className="rounded bg-emerald-400/10 px-1 py-0.5 text-[9px] text-emerald-300 ring-1 ring-emerald-400/20">Sheet</span>}</div></td>
                     <td className="px-4 py-3"><span className={`rounded-md px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${CAT_CLS[t.kategori]||CAT_CLS.Lainnya}`}>{t.kategori}</span></td>
                     <td className="px-4 py-3 text-slate-400">{t.kas}</td>
                     <td className="px-4 py-3 text-right">{t.masuk>0?<span className="inline-flex items-center gap-1 font-semibold tabular-nums text-emerald-400"><ArrowDownLeft className="h-3.5 w-3.5"/>{fmt(t.masuk)}</span>:<span className="inline-flex items-center gap-1 font-semibold tabular-nums text-rose-400"><ArrowUpRight className="h-3.5 w-3.5"/>{fmt(t.keluar)}</span>}</td>

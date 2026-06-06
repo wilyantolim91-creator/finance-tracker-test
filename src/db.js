@@ -1,7 +1,7 @@
 import { supabase } from './supabaseConfig';
 
 function mapTx(t) {
-  return { id: t.id, tgl: t.tgl, desc: t.deskripsi, masuk: t.masuk, keluar: t.keluar, kategori: t.kategori, kas: t.kas, tujuan: t.tujuan || '' };
+  return { id: t.id, tgl: t.tgl, desc: t.deskripsi, masuk: t.masuk, keluar: t.keluar, kategori: t.kategori, kas: t.kas, tujuan: t.tujuan || '', sync_source: t.sync_source || '', updated_at: t.updated_at || '' };
 }
 
 export const db = {
@@ -77,7 +77,7 @@ export const db = {
     if (!proj) throw new Error('Project tidak ditemukan');
     const { data, error } = await supabase.from('transactions').insert({
       project_id: proj.id, tgl: tx.tgl, deskripsi: tx.desc,
-      masuk: tx.masuk || 0, keluar: tx.keluar || 0, kategori: tx.kategori, kas: tx.kas, tujuan: tx.tujuan || ''
+      masuk: tx.masuk || 0, keluar: tx.keluar || 0, kategori: tx.kategori, kas: tx.kas, tujuan: tx.tujuan || '', sync_source: 'app'
     }).select().single();
     if (error) throw error;
     return mapTx(data);
@@ -85,12 +85,28 @@ export const db = {
   async updateTransaction(id, tx) {
     const { error } = await supabase.from('transactions').update({
       tgl: tx.tgl, deskripsi: tx.desc, masuk: tx.masuk || 0,
-      keluar: tx.keluar || 0, kategori: tx.kategori, kas: tx.kas, tujuan: tx.tujuan || ''
+      keluar: tx.keluar || 0, kategori: tx.kategori, kas: tx.kas, tujuan: tx.tujuan || '', sync_source: 'app'
     }).eq('id', id);
     if (error) throw error;
   },
   async deleteTransaction(id) {
     const { error } = await supabase.from('transactions').delete().eq('id', id);
+    if (error) throw error;
+  },
+
+  // SYNC HELPERS
+  async addProject(name, totalKontrak) {
+    const { data, error } = await supabase.from('projects').insert({ name, total_kontrak: totalKontrak || 0 }).select().single();
+    if (error) throw error;
+    return data;
+  },
+  async getLastSyncTime(projectName) {
+    const { data, error } = await supabase.from('sync_log').select('synced_at').eq('project_name', projectName).order('synced_at', { ascending: false }).limit(1).single();
+    if (error || !data) return null;
+    return data.synced_at;
+  },
+  async forceSyncTrigger(projectName) {
+    const { error } = await supabase.from('sync_log').insert({ project_name: projectName, direction: 'db_to_sheet', synced_count: 0, synced_at: new Date().toISOString() });
     if (error) throw error;
   }
 };
