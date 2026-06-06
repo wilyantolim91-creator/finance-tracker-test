@@ -248,13 +248,21 @@ function onSheetEdit(e) {
  *   5. Lepas kunci
  */
 function syncBidirectional() {
-  const props = PropertiesService.getScriptProperties();
-
-  // --- Mekanisme kunci ---
-  if (!acquireLock(props)) {
-    Logger.log('⏳ Sinkronisasi dilewati — proses lain sedang berjalan.');
+  const lock = LockService.getScriptLock();
+  try {
+    // Coba dapatkan lock, tunggu hingga 10 detik. Jika gagal, return.
+    const hasLock = lock.tryLock(10000);
+    if (!hasLock) {
+      Logger.log('⏳ Sinkronisasi dilewati — proses lain sedang berjalan.');
+      return;
+    }
+  } catch (err) {
+    Logger.log('❌ Gagal mendapatkan lock: ' + err.message);
     return;
   }
+
+  const props = PropertiesService.getScriptProperties();
+  props.setProperty('IS_SYNCING', 'true');
 
   try {
     Logger.log('🔄 Memulai sinkronisasi dua arah...');
@@ -320,7 +328,8 @@ function syncBidirectional() {
   } catch (err) {
     Logger.log('❌ Error fatal sinkronisasi: ' + err.message);
   } finally {
-    releaseLock(props);
+    props.setProperty('IS_SYNCING', 'false');
+    lock.releaseLock();
   }
 }
 
@@ -356,15 +365,19 @@ function syncSheetToSupabase(sheet, sheetName, projectId) {
   const dataRange = sheet.getRange(TX_START_ROW, 1, numRows, HASH_COL);
   const allRows = dataRange.getValues();
 
+  // Ambil range ID dan Hash (Kolom L dan M) untuk di-update sekaligus di akhir
+  const idHashRange = sheet.getRange(TX_START_ROW, ID_COL, numRows, 2);
+  const idHashValues = idHashRange.getValues();
+
   const sheetUUIDs = []; // Kumpulkan UUID yang ada di sheet
   const batchInserts = []; // Kumpulkan baris untuk batch insert
-  const batchInsertRows = []; // Simpan nomor baris untuk tulis UUID balik
+  const batchInsertRows = []; // Simpan indeks array untuk tulis UUID balik
+  let hasChanges = false;
 
   setSyncFlag(true);
   try {
     for (let i = 0; i < allRows.length; i++) {
       const row = allRows[i];
-      const actualRow = TX_START_ROW + i;
 
       // Lewati baris kosong (tidak ada tanggal DAN tidak ada deskripsi)
       if (!row[0] && !row[1]) continue;
@@ -388,8 +401,9 @@ function syncSheetToSupabase(sheet, sheetName, projectId) {
 
           supaFetch(`/rest/v1/transactions?id=eq.${existingId}`, 'PATCH', txData);
 
-          // Perbarui hash di sheet
-          sheet.getRange(actualRow, HASH_COL).setValue(newHash);
+          // Perbarui hash di memori
+          idHashValues[i][1] = newHash;
+          hasChanges = true;
           changeCount++;
         }
       } else {
@@ -398,7 +412,7 @@ function syncSheetToSupabase(sheet, sheetName, projectId) {
         txData.sync_source = 'sheet';
 
         batchInserts.push(txData);
-        batchInsertRows.push({ rowIndex: actualRow, hash: newHash });
+        batchInsertRows.push({ arrayIndex: i, hash: newHash });
       }
     }
 
@@ -414,13 +428,20 @@ function syncSheetToSupabase(sheet, sheetName, projectId) {
       if (inserted && inserted.length > 0) {
         for (let j = 0; j < inserted.length; j++) {
           const rowInfo = batchInsertRows[j];
-          sheet.getRange(rowInfo.rowIndex, ID_COL).setValue(inserted[j].id);
-          sheet.getRange(rowInfo.rowIndex, HASH_COL).setValue(rowInfo.hash);
+          idHashValues[rowInfo.arrayIndex][0] = inserted[j].id; // Tulis ID di memori
+          idHashValues[rowInfo.arrayIndex][1] = rowInfo.hash;   // Tulis Hash di memori
           sheetUUIDs.push(inserted[j].id);
         }
+        hasChanges = true;
         changeCount += inserted.length;
         Logger.log(`➕ ${inserted.length} baris baru ditambahkan dari "${sheetName}"`);
       }
+    }
+
+    // Tulis semua perubahan ID/Hash ke sheet sekaligus
+    if (hasChanges) {
+      idHashRange.setValues(idHashValues);
+      SpreadsheetApp.flush(); // Pastikan data tertulis sebelum hapus orphan
     }
 
     // Hapus transaksi "orphan" (ada di Supabase tapi sudah dihapus di sheet)
@@ -458,9 +479,9 @@ function deleteOrphanedTransactions(projectId, sheetUUIDs) {
 
   if (orphanIds.length === 0) return 0;
 
-  // Hapus orphan satu per satu (Supabase REST API tidak mendukung bulk delete by array langsung)
-  // Gunakan filter `in` untuk efisiensi
-  const idsParam = `(${orphanIds.map(id => `"${id}"`).join(',')})`;
+  // Hapus orphan secara bulk menggunakan filter `in`
+  // Kita hilangkan tanda kutip ganda agar URL-safe tanpa encoding tambahan
+  const idsParam = `(${orphanIds.join(',')})`;
   supaFetch(
     `/rest/v1/transactions?id=in.${idsParam}&project_id=eq.${projectId}`,
     'DELETE'
@@ -1034,27 +1055,32 @@ function logSync(projectName, direction, count) {
  * Panggil fungsi ini secara manual jika terjadi inkonsistensi data.
  */
 function forceFullSync() {
-  const props = PropertiesService.getScriptProperties();
-
-  // Reset semua timestamp sinkronisasi terakhir
-  const allProps = props.getProperties();
-  for (const key in allProps) {
-    if (key.startsWith('LAST_SYNC_')) {
-      props.deleteProperty(key);
+  const lock = LockService.getScriptLock();
+  try {
+    const hasLock = lock.tryLock(30000); // Tunggu sampai 30 detik
+    if (!hasLock) {
+      Logger.log('⏳ Full sync dilewati — proses lain sedang berjalan.');
+      return;
     }
+  } catch (err) {
+    Logger.log('❌ Gagal mendapatkan lock untuk full sync: ' + err.message);
+    return;
   }
 
-  Logger.log('🔄 Memulai sinkronisasi penuh paksa...');
-
-  // Jalankan sinkronisasi dengan lock manual
-  if (!acquireLock(props)) {
-    Logger.log('⏳ Proses sinkronisasi lain sedang berjalan. Menunggu...');
-    // Paksa lepas kunci untuk full sync
-    releaseLock(props);
-    acquireLock(props);
-  }
+  const props = PropertiesService.getScriptProperties();
+  props.setProperty('IS_SYNCING', 'true');
 
   try {
+    // Reset semua timestamp sinkronisasi terakhir
+    const allProps = props.getProperties();
+    for (const key in allProps) {
+      if (key.startsWith('LAST_SYNC_')) {
+        props.deleteProperty(key);
+      }
+    }
+
+    Logger.log('🔄 Memulai sinkronisasi penuh paksa...');
+
     const ss = SpreadsheetApp.getActive();
     detectNewSheets(ss);
 
@@ -1092,7 +1118,8 @@ function forceFullSync() {
     Logger.log(`🎉 Sinkronisasi penuh selesai. Total: ${totalSynced} perubahan.`);
 
   } finally {
-    releaseLock(props);
+    props.setProperty('IS_SYNCING', 'false');
+    lock.releaseLock();
   }
 }
 
