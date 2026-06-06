@@ -17,7 +17,7 @@ const KAS_LIST  = ['KAS UTAMA','KAS AWEN','KAS WILY'];
 const REAL_CATS = ['Material','Upah','Labor','Lainnya'];
 const ALL_CATS  = ['Material','Upah','Labor','Lainnya','Transfer','Transfer Internal'];
 const fmt  = n => 'Rp ' + new Intl.NumberFormat('id-ID').format(Math.round(n));
-const fmtS = n => { const a=Math.abs(n),s=n<0?'-':''; if(a>=1e9)return`${s}Rp ${(a/1e9).toFixed(1)}M`; if(a>=1e6)return`${s}Rp ${(a/1e6).toFixed(1)}jt`; if(a>=1e3)return`${s}Rp ${(a/1e3).toFixed(0)}rb`; return`Rp ${n}`; };
+const fmtS = n => fmt(n);
 const TODAY = () => new Date().toISOString().slice(0,10);
 
 /* ─── METRICS ─── */
@@ -587,7 +587,7 @@ function MainApp({currentUser,onLogout}){
 
           {tab==='dashboard'&&<div className="space-y-3">
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <Card label="Total Kontrak" value={fmtS(m.totalKontrak)} sub={fmt(m.totalKontrak)} icon={Wallet} accent="bg-sky-500/30"/>
+              <Card label="Total Kontrak" value={fmtS(m.totalKontrak)} sub="Nilai kontrak proyek" icon={Wallet} accent="bg-sky-500/30"/>
               <Card label="DP Masuk" value={fmtS(m.dpMasuk)} sub={`${m.totalKontrak?((m.dpMasuk/m.totalKontrak)*100).toFixed(0):0}% dari kontrak`} icon={ArrowDownLeft} accent="bg-emerald-500/30"/>
               <Card label="Sisa Pembayaran" value={fmtS(m.sisaPembayaran)} sub="Belum ditagih" icon={TrendingUp} accent="bg-amber-500/30"/>
               <Card label="Saldo Akhir" value={fmtS(m.saldoAkhir)} sub={`Pengeluaran ${fmtS(m.totalBiaya)}`} icon={TrendingDown} accent="bg-violet-500/30"/>
