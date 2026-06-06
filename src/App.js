@@ -20,9 +20,11 @@ const fmtS = n => { const a=Math.abs(n),s=n<0?'-':''; if(a>=1e9)return`${s}Rp ${
 const TODAY = () => new Date().toISOString().slice(0,10);
 
 /* ─── METRICS ─── */
-function computeMetrics(totalKontrak, txs=[]) {
+function computeMetrics(totalKontrak, txs=[], dpMasukDb=0) {
   const sorted=[...txs].sort((a,b)=>a.tgl.localeCompare(b.tgl));
-  const dpMasuk=sorted.filter(t=>t.kategori==='Transfer'&&t.masuk>0).reduce((s,t)=>s+t.masuk,0);
+  const dpMasuk=(dpMasukDb !== undefined && dpMasukDb !== null && dpMasukDb > 0)
+    ? dpMasukDb
+    : sorted.filter(t=>t.kategori==='Transfer'&&t.masuk>0).reduce((s,t)=>s+t.masuk,0);
   const perKas=Object.fromEntries(KAS_LIST.map(k=>[k,0]));
   sorted.forEach(t=>{perKas[t.kas]=(perKas[t.kas]||0)+t.masuk-t.keluar;});
   const perKat={};
@@ -240,7 +242,7 @@ function MainApp({currentUser,onLogout}){
 
   const projData=projects.find(p=>p.name===proj);
   const txList=useMemo(()=>transactions[proj]||[],[transactions,proj]);
-  const m=useMemo(()=>computeMetrics(projData?.total_kontrak||0,txList),[projData,txList]);
+  const m=useMemo(()=>computeMetrics(projData?.total_kontrak||0,txList,projData?.dp_masuk||0),[projData,txList]);
 
   const handleAdd=async tx=>{try{await db.addTransaction(proj,tx);await loadTxs(proj);}catch(e){alert('Gagal simpan: '+e.message);}};
   const handleSave=async tx=>{try{if(editTx?.id){await db.updateTransaction(editTx.id,tx);}else{await db.addTransaction(proj,tx);}await loadTxs(proj);setEditTx(null);}catch(e){alert('Gagal: '+e.message);}};

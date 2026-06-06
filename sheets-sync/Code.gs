@@ -32,6 +32,12 @@ const KONTRAK_ROW = 4;
 /** Kolom yang berisi nilai Total Kontrak (E = 5) */
 const KONTRAK_COL = 5;
 
+/** Baris yang berisi nilai DP Masuk */
+const DP_MASUK_ROW = 5;
+
+/** Kolom yang berisi nilai DP Masuk (E = 5) */
+const DP_MASUK_COL = 5;
+
 /** Kolom tersembunyi untuk menyimpan UUID Supabase (L = 12) */
 const ID_COL = 12;
 
@@ -156,7 +162,8 @@ function onSheetEdit(e) {
 
     // Dapatkan atau buat proyek di Supabase
     const kontrak = sheet.getRange(KONTRAK_ROW, KONTRAK_COL).getValue();
-    const projectId = getOrCreateProject(sheetName, toNumber(kontrak));
+    const dpMasuk = sheet.getRange(DP_MASUK_ROW, DP_MASUK_COL).getValue();
+    const projectId = getOrCreateProject(sheetName, toNumber(kontrak), toNumber(dpMasuk));
 
     if (!projectId) {
       Logger.log('❌ Gagal mendapatkan project ID untuk: ' + sheetName);
@@ -267,7 +274,8 @@ function syncBidirectional() {
       try {
         // Dapatkan project ID
         const kontrak = sheet.getRange(KONTRAK_ROW, KONTRAK_COL).getValue();
-        const projectId = getOrCreateProject(sheetName, toNumber(kontrak));
+        const dpMasuk = sheet.getRange(DP_MASUK_ROW, DP_MASUK_COL).getValue();
+        const projectId = getOrCreateProject(sheetName, toNumber(kontrak), toNumber(dpMasuk));
 
         if (!projectId) {
           Logger.log(`⚠️ Proyek "${sheetName}" tidak ditemukan di Supabase, dilewati.`);
@@ -629,7 +637,8 @@ function detectNewSheets(ss) {
     if (_projectCache[name]) continue;
 
     const kontrak = sheet.getRange(KONTRAK_ROW, KONTRAK_COL).getValue();
-    const projectId = getOrCreateProject(name, toNumber(kontrak));
+    const dpMasuk = sheet.getRange(DP_MASUK_ROW, DP_MASUK_COL).getValue();
+    const projectId = getOrCreateProject(name, toNumber(kontrak), toNumber(dpMasuk));
 
     if (projectId) {
       Logger.log(`📂 Proyek terdeteksi/dibuat: "${name}" (ID: ${projectId})`);
@@ -835,7 +844,7 @@ function getProjectId(name) {
   if (_projectCache[name]) return _projectCache[name].id;
 
   const result = supaFetch(
-    `/rest/v1/projects?name=eq.${encodeURIComponent(name)}&select=id,total_kontrak`,
+    `/rest/v1/projects?name=eq.${encodeURIComponent(name)}&select=id,total_kontrak,dp_masuk`,
     'GET'
   );
 
@@ -849,25 +858,38 @@ function getProjectId(name) {
 
 /**
  * Mendapatkan UUID proyek yang sudah ada, atau membuat proyek baru di Supabase.
- * Jika proyek sudah ada tetapi total kontraknya berbeda, perbarui di Supabase.
+ * Jika proyek sudah ada tetapi total kontrak atau DP masuk berbeda, perbarui di Supabase.
  *
  * @param {string} name — Nama proyek (= nama sheet)
  * @param {number} kontrak — Nilai total kontrak
+ * @param {number} dpMasuk — Nilai DP masuk
  * @returns {string|null} UUID proyek
  */
-function getOrCreateProject(name, kontrak) {
+function getOrCreateProject(name, kontrak, dpMasuk) {
   // Coba dapatkan yang sudah ada
   let projectId = getProjectId(name);
   if (projectId) {
     const cachedProj = _projectCache[name];
     const targetKontrak = kontrak || 0;
-    if (cachedProj && Number(cachedProj.total_kontrak) !== Number(targetKontrak)) {
-      Logger.log(`🔄 Memperbarui total kontrak proyek "${name}" dari Rp ${cachedProj.total_kontrak} ke Rp ${targetKontrak}`);
-      supaFetch(`/rest/v1/projects?id=eq.${projectId}`, 'PATCH', {
-        total_kontrak: targetKontrak
-      });
-      // Perbarui cache
-      cachedProj.total_kontrak = targetKontrak;
+    const targetDp = dpMasuk || 0;
+    
+    const needsKontrakUpdate = cachedProj && Number(cachedProj.total_kontrak) !== Number(targetKontrak);
+    const needsDpUpdate = cachedProj && Number(cachedProj.dp_masuk) !== Number(targetDp);
+
+    if (needsKontrakUpdate || needsDpUpdate) {
+      const updates = {};
+      if (needsKontrakUpdate) {
+        Logger.log(`🔄 Memperbarui total kontrak proyek "${name}" dari Rp ${cachedProj.total_kontrak} ke Rp ${targetKontrak}`);
+        updates.total_kontrak = targetKontrak;
+        cachedProj.total_kontrak = targetKontrak;
+      }
+      if (needsDpUpdate) {
+        Logger.log(`🔄 Memperbarui DP masuk proyek "${name}" dari Rp ${cachedProj.dp_masuk || 0} ke Rp ${targetDp}`);
+        updates.dp_masuk = targetDp;
+        cachedProj.dp_masuk = targetDp;
+      }
+
+      supaFetch(`/rest/v1/projects?id=eq.${projectId}`, 'PATCH', updates);
     }
     return projectId;
   }
@@ -876,7 +898,8 @@ function getOrCreateProject(name, kontrak) {
   Logger.log(`🆕 Membuat proyek baru di Supabase: "${name}"`);
   const result = supaFetch('/rest/v1/projects', 'POST', {
     name: name,
-    total_kontrak: kontrak || 0
+    total_kontrak: kontrak || 0,
+    dp_masuk: dpMasuk || 0
   }, { prefer: 'return=representation' });
 
   if (result && result.length > 0) {
@@ -1032,7 +1055,8 @@ function forceFullSync() {
 
       try {
         const kontrak = sheet.getRange(KONTRAK_ROW, KONTRAK_COL).getValue();
-        const projectId = getOrCreateProject(sheetName, toNumber(kontrak));
+        const dpMasuk = sheet.getRange(DP_MASUK_ROW, DP_MASUK_COL).getValue();
+        const projectId = getOrCreateProject(sheetName, toNumber(kontrak), toNumber(dpMasuk));
 
         if (!projectId) continue;
 

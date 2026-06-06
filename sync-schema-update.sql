@@ -7,6 +7,29 @@
 -- ============================================================
 
 -- ************************************************************
+-- 0. Tambah kolom `dp_masuk` pada tabel `projects`
+--    - dp_masuk: nilai Down Payment masuk (dari kolom E baris 5 di Google Sheet)
+-- ************************************************************
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name   = 'projects'
+          AND column_name  = 'dp_masuk'
+    ) THEN
+        ALTER TABLE public.projects
+            ADD COLUMN dp_masuk NUMERIC DEFAULT 0;
+
+        RAISE NOTICE 'Kolom dp_masuk berhasil ditambahkan ke projects.';
+    ELSE
+        RAISE NOTICE 'Kolom dp_masuk sudah ada, dilewati.';
+    END IF;
+END
+$$;
+
+
+-- ************************************************************
 -- 1. Tambah kolom sync pada tabel `transactions`
 --    - sync_source : asal data ('app' atau 'sheet')
 --    - sync_hash   : hash baris untuk deteksi perubahan
