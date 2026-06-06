@@ -9,6 +9,7 @@ import {
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import { db } from './db';
+import { supabase } from './supabaseConfig';
 
 /* ─── CONSTANTS ─── */
 const KAS_LIST  = ['KAS UTAMA','KAS AWEN','KAS WILY'];
@@ -213,6 +214,18 @@ function MainApp({currentUser,onLogout}){
 
   useEffect(()=>{loadAll();},[loadAll]);
   useEffect(()=>{if(proj)loadTxs(proj);},[proj,loadTxs]);
+
+  // ── Realtime subscription: auto-update when data changes ──
+  useEffect(()=>{
+    if(!proj)return;
+    const channel=supabase
+      .channel(`tx-realtime-${proj}`)
+      .on('postgres_changes',{event:'*',schema:'public',table:'transactions'},()=>{
+        loadTxs(proj);
+      })
+      .subscribe();
+    return()=>{supabase.removeChannel(channel);};
+  },[proj,loadTxs]);
 
   const projData=projects.find(p=>p.name===proj);
   const txList=useMemo(()=>transactions[proj]||[],[transactions,proj]);
