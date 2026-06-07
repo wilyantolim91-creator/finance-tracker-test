@@ -182,12 +182,12 @@ function Card({label,value,sub,icon:I,accent,glowClass}){return(<div className={
 function FInput({label,v,onChange,type='text',opts}){const cls='w-full rounded-lg border border-white/10 bg-slate-800 px-2 py-1.5 text-white placeholder-slate-500 outline-none focus:border-cyan-400/40';return(<label className="block"><span className="mb-1 block text-[10px] uppercase tracking-wider text-slate-500">{label}</span>{opts?<select value={v} onChange={e=>onChange(e.target.value)} className={cls}>{opts.map(o=><option key={o} className="bg-slate-800">{o}</option>)}</select>:<input type={type} value={v} onChange={e=>onChange(e.target.value)} className={cls}/>}</label>);}
 
 function RowInput({label,v,onChange,type='text',opts,readOnly,customColorClass}){
-  const cls='flex-1 rounded-lg border border-white/10 bg-slate-950 px-3 py-1.5 text-xs text-white placeholder-slate-500 outline-none focus:border-cyan-400/40 min-w-0';
+  const cls='flex-1 rounded-md border border-white/10 bg-slate-950 px-2 py-1 text-[11px] text-white placeholder-slate-500 outline-none focus:border-cyan-400/40 min-w-0';
   return(
-    <div className="flex items-center justify-between gap-3 py-0.5">
-      <span className="text-[11px] font-semibold text-slate-400 w-36 shrink-0">{label}</span>
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-[10px] font-semibold text-slate-400 w-28 shrink-0">{label}</span>
       {readOnly ? (
-        <div className={`flex-1 px-3 py-1.5 text-xs font-bold ${customColorClass || 'text-slate-300'}`}>
+        <div className={`flex-1 px-2 py-1 text-[11px] font-bold ${customColorClass || 'text-slate-300'}`}>
           {v}
         </div>
       ) : opts ? (
@@ -504,8 +504,24 @@ function FloatingAI({onAdd, allProjects, currentProject}){
         }
         return m;
       }));
-      // Append success message
-      setMessages(prev => [...prev, { sender: 'ai', text: `✅ Siap bos! Transaksi "${draft.desc}" sebesar ${fmt(total)} sudah berhasil dicatat di proyek *${draft.project}* dan disinkronkan ke Google Sheets.` }]);
+      // Append success message with full detail
+      const detailLines = [
+        `✅ Transaksi berhasil disimpan!`,
+        ``,
+        `📋 Detail:`,
+        `• Tanggal: ${draft.tgl}`,
+        `• Deskripsi: ${draft.desc}`,
+        `• Volume: ${draft.volume} ${draft.satuan}`,
+        `• Harga Satuan: ${fmt(draft.harga_satuan)}`,
+        `• Total: ${fmt(total)}`,
+        `• Kategori: ${draft.kategori}`,
+        `• Kas: ${draft.kas}`,
+        `• Proyek: ${draft.project}`,
+        draft.tujuan ? `• Tujuan: ${draft.tujuan}` : '',
+        ``,
+        `Data sudah tersimpan ke database.`
+      ].filter(Boolean).join('\n');
+      setMessages(prev => [...prev, { sender: 'ai', text: detailLines }]);
     } catch (err) {
       setNote('Gagal menyimpan transaksi: ' + err.message);
     }
@@ -588,16 +604,16 @@ function FloatingAI({onAdd, allProjects, currentProject}){
 
               {/* INLINE DRAFT PROPOSAL CARD */}
               {m.sender === 'ai' && m.draft && (
-                <div className="rounded-xl border border-indigo-500/30 bg-slate-950/80 p-4 shadow-2xl flex flex-col gap-3">
-                  <div className="flex items-center justify-between border-b border-white/5 pb-2">
-                    <div className="flex items-center gap-1.5 text-indigo-400">
-                      <Receipt className="h-4 w-4" />
-                      <span className="text-[11px] font-bold uppercase tracking-wider">Konfirmasi Transaksi AI</span>
+                <div className="rounded-xl border border-indigo-500/30 bg-slate-950/80 p-3 shadow-2xl flex flex-col gap-2">
+                  <div className="flex items-center justify-between border-b border-white/5 pb-1.5">
+                    <div className="flex items-center gap-1 text-indigo-400">
+                      <Receipt className="h-3.5 w-3.5" />
+                      <span className="text-[10px] font-bold uppercase tracking-wider">Konfirmasi Transaksi</span>
                     </div>
-                    <button onClick={() => handleCancelDraft(idx)} className="text-[10px] text-rose-400 hover:underline">Hapus Draft</button>
+                    <button onClick={() => handleCancelDraft(idx)} className="text-[9px] text-rose-400 hover:underline">Hapus</button>
                   </div>
                   
-                  <div className="space-y-2.5">
+                  <div className="space-y-1.5">
                     <RowInput 
                       label="Tanggal:" 
                       v={m.draft.tgl} 
@@ -621,10 +637,9 @@ function FloatingAI({onAdd, allProjects, currentProject}){
                       onChange={v => handleUpdateDraft(idx, 'satuan', v)} 
                     />
                     <RowInput 
-                      label="Harga Satuan (IDR):" 
-                      v={m.draft.harga_satuan} 
-                      type="number" 
-                      onChange={v => handleUpdateDraft(idx, 'harga_satuan', Number(v) || 0)} 
+                      label="Hrg Satuan (IDR):" 
+                      v={new Intl.NumberFormat('id-ID').format(m.draft.harga_satuan)} 
+                      onChange={v => handleUpdateDraft(idx, 'harga_satuan', Number(String(v).replace(/\D/g,'')) || 0)} 
                     />
                     <RowInput 
                       label="Total Harga (IDR):" 
@@ -659,7 +674,7 @@ function FloatingAI({onAdd, allProjects, currentProject}){
 
                   <button 
                     onClick={() => handleSaveDraft(idx)} 
-                    className="mt-1 w-full rounded-xl bg-indigo-600 hover:bg-indigo-500 py-2.5 text-xs font-bold text-white shadow-lg shadow-indigo-600/10 flex items-center justify-center gap-2 transition"
+                    className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-500 py-2 text-[11px] font-bold text-white shadow-lg shadow-indigo-600/10 flex items-center justify-center gap-1.5 transition"
                   >
                     <Check className="h-4 w-4" /> Simpan Ke Ledger
                   </button>
