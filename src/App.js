@@ -948,8 +948,8 @@ function MainApp({currentUser,onLogout}){
 
   // ── Google Sheets Sync Triggers ──
   const triggerGasSync = async () => {
-    // Web App proxy URL (sudah jalan realtime 15 detik)
-    const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzwSZ9wli86Lj_Fh7MGJRHdMJKu-Sh4kxYGUblft8AytaQXL0V2-zVnjY-GiUD770AlEw/exec';
+    // Web App proxy URL (new deployment)
+    const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxlevTOkjKO6HDQxcCGObGxSGuT4IgZWXFr-WdhnOkoKGzOklfDrrbgi_020u_SaTHl6g/exec';
     
     try {
       const response = await fetch(WEB_APP_URL, {
@@ -971,7 +971,7 @@ function MainApp({currentUser,onLogout}){
   };
 
   const handleSync = async () => {
-    const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzwSZ9wli86Lj_Fh7MGJRHdMJKu-Sh4kxYGUblft8AytaQXL0V2-zVnjY-GiUD770AlEw/exec';
+    const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxlevTOkjKO6HDQxcCGObGxSGuT4IgZWXFr-WdhnOkoKGzOklfDrrbgi_020u_SaTHl6g/exec';
     
     setSyncingGas(true);
     try {
