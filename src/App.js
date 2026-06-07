@@ -957,16 +957,18 @@ function MainApp({currentUser,onLogout}){
       const response = await fetch(url, {
         method: 'POST',
         body: JSON.stringify({
-          action: 'sync',
-          token: 'sb_publishable_wBxny-c-7GFsoIjS9Xaasw_IguFmgWC'
+          action: 'syncNow',
+          projectName: proj || 'karantina-59'
         })
       });
       const data = await response.json();
-      if (!data.success) {
-        console.error('Google Sheets Sync Error:', data.error);
+      if (data.status === 'success') {
+        console.log('✅ Instant sync ke Google Sheets berhasil!');
+      } else {
+        console.error('Google Sheets Sync Error:', data.message);
       }
     } catch (e) {
-      console.error('Gagal memicu sync GAS:', e);
+      console.error('Gagal memicu instant sync:', e);
     }
   };
 
@@ -982,17 +984,19 @@ function MainApp({currentUser,onLogout}){
       const response = await fetch(url, {
         method: 'POST',
         body: JSON.stringify({
-          action: 'sync',
-          token: 'sb_publishable_wBxny-c-7GFsoIjS9Xaasw_IguFmgWC'
+          action: 'syncNow',
+          projectName: proj || 'karantina-59'
         })
       });
       const data = await response.json();
-      if (!data.success) {
-        alert('Gagal sinkronisasi Google Sheets: ' + (data.error || 'Terjadi kesalahan'));
+      if (data.status !== 'success') {
+        alert('Gagal sinkronisasi Google Sheets: ' + (data.message || 'Terjadi kesalahan'));
+      } else {
+        alert('✅ Sinkronisasi berhasil! Data sudah di-update di Google Sheets.');
       }
     } catch (e) {
       console.error('Gagal sinkronisasi:', e);
-      alert('Gagal menghubungi Google Sheets Web App. Pastikan URL sudah benar di pengaturan proyek dan hak akses deployment Google Apps Script diatur sebagai "Anyone".');
+      alert('Gagal menghubungi Google Sheets Web App. Pastikan URL sudah benar dan hak akses Web App deployment diatur sebagai "Anyone".');
     } finally {
       await loadTxs(proj);
       setSyncingGas(false);
