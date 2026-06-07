@@ -102,6 +102,58 @@ function setupAutoSync() {
 }
 
 // ============================================================================
+// 1b. WEB APP ENDPOINTS — Sinkronisasi Instan Dipicu oleh App
+// ============================================================================
+
+/**
+ * Menangani request POST dari React App untuk memicu sinkronisasi secara instan.
+ * Menggunakan token validasi sederhana berbasis SUPABASE_KEY.
+ *
+ * @param {Object} e — Event object dari doPost
+ * @returns {TextOutput} Response JSON sukses/gagal
+ */
+function doPost(e) {
+  const res = { success: false };
+  try {
+    const postData = JSON.parse(e.postData.contents);
+    Logger.log('📥 Request masuk ke Web App: ' + JSON.stringify(postData));
+
+    // Validasi token keamanan
+    if (postData.token !== SUPABASE_KEY) {
+      res.error = 'Unauthorized';
+      return ContentService.createTextOutput(JSON.stringify(res))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (postData.action === 'sync') {
+      Logger.log('🔄 Memulai sinkronisasi bidirectional instan atas permintaan App...');
+      syncBidirectional();
+      res.success = true;
+      res.message = 'Sinkronisasi berhasil dipicu dari App.';
+    } else {
+      res.error = 'Action tidak dikenal';
+    }
+  } catch (err) {
+    Logger.log('❌ Error di doPost: ' + err.message);
+    res.error = err.message;
+  }
+  
+  return ContentService.createTextOutput(JSON.stringify(res))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+/**
+ * Menangani request GET untuk verifikasi status Web App.
+ */
+function doGet(e) {
+  return ContentService.createTextOutput(JSON.stringify({
+    success: true,
+    message: 'FinTrack Sheets Sync Web App is running.',
+    timezone: SpreadsheetApp.getActive().getSpreadsheetTimeZone()
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
+// ============================================================================
 // 2. ON EDIT TRIGGER — Sinkronisasi Instan Saat Sel Diedit
 // ============================================================================
 
@@ -764,10 +816,15 @@ function toISO(val) {
   // Jika sudah berupa Date object
   if (val instanceof Date) {
     if (isNaN(val.getTime())) return null;
-    const y = val.getFullYear();
-    const m = String(val.getMonth() + 1).padStart(2, '0');
-    const d = String(val.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
+    try {
+      // Menggunakan timezone spreadsheet untuk menghindari pergeseran tanggal
+      return Utilities.formatDate(val, SpreadsheetApp.getActive().getSpreadsheetTimeZone(), "yyyy-MM-dd");
+    } catch (e) {
+      const y = val.getFullYear();
+      const m = String(val.getMonth() + 1).padStart(2, '0');
+      const d = String(val.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
   }
 
   // Jika string format DD-MM-YYYY

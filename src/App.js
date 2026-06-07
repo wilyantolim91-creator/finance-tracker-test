@@ -248,10 +248,16 @@ function UserModal({title,init,allProjects,onSave,onClose,isSelf}){
 function SettingsPage({users,allProjects,currentUser,onUsersChange}){
   const[addOpen,setAddOpen]=useState(false);const[editUser,setEditUser]=useState(null);const[toast,setToast]=useState('');
   const [geminiKey, setGeminiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
+  const [gasUrl, setGasUrl] = useState(() => localStorage.getItem('gas_web_app_url') || '');
+  
   const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(''),2500);};
   const saveGeminiKey = () => {
     localStorage.setItem('gemini_api_key', geminiKey.trim());
     showToast('Gemini API Key berhasil disimpan.');
+  };
+  const saveGasUrl = () => {
+    localStorage.setItem('gas_web_app_url', gasUrl.trim());
+    showToast('Google Sheets Web App URL berhasil disimpan.');
   };
   const handleAdd=async f=>{if(!f.username||!f.password){showToast('Username & password wajib.');return;}if(users.find(u=>u.username===f.username)){showToast('Username sudah ada.');return;}try{const newU=await db.addUser(f.username,f.password,f.role);await db.setUserProjects(newU.id,f.role==='admin'?[]:f.assignedProjects);onUsersChange();showToast(`User "${f.username}" ditambahkan.`);}catch(e){showToast('Gagal: '+e.message);}};
   const handleEdit=async(uid,uname,f)=>{try{const upd={role:f.isSelf?undefined:f.role};if(f.password)upd.password=f.password;Object.keys(upd).forEach(k=>upd[k]===undefined&&delete upd[k]);if(Object.keys(upd).length>0)await db.updateUser(uid,upd);if(!f.isSelf||f.role!=='admin')await db.setUserProjects(uid,f.role==='admin'?[]:f.assignedProjects);onUsersChange();showToast(`User "${uname}" diupdate.`);}catch(e){showToast('Gagal: '+e.message);}};
@@ -284,6 +290,27 @@ function SettingsPage({users,allProjects,currentUser,onUsersChange}){
             className="rounded-lg bg-gradient-to-r from-sky-400 to-cyan-500 px-4 py-1.5 text-xs font-semibold text-slate-950 hover:opacity-90"
           >
             Simpan Key
+          </button>
+        </div>
+      </div>
+    </div>
+    <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-5">
+      <div className="mb-3 flex items-center gap-2"><RefreshCw className="h-4 w-4 text-cyan-400"/><span className="text-sm font-semibold text-white">Konfigurasi Google Sheets Sync</span></div>
+      <div className="space-y-3">
+        <p className="text-xs text-slate-400">Masukkan URL Web App Google Apps Script Anda untuk sinkronisasi 2 arah otomatis (App ↔ Google Sheets) secara instan.</p>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            placeholder="https://script.google.com/macros/s/.../exec"
+            value={gasUrl}
+            onChange={e=>setGasUrl(e.target.value)}
+            className="flex-1 rounded-lg border border-white/10 bg-slate-800 px-3 py-1.5 text-xs text-white placeholder-slate-500 outline-none focus:border-cyan-400/40"
+          />
+          <button
+            onClick={saveGasUrl}
+            className="rounded-lg bg-gradient-to-r from-sky-400 to-cyan-500 px-4 py-1.5 text-xs font-semibold text-slate-950 hover:opacity-90"
+          >
+            Simpan URL
           </button>
         </div>
       </div>
@@ -731,6 +758,7 @@ function MainApp({currentUser,onLogout}){
   const[projects,setProjects]=useState([]);const[users,setUsers]=useState([]);const[transactions,setTxs]=useState({});
   const[loading,setLoading]=useState(true);const[project,setProject]=useState('');const[tab,setTab]=useState('dashboard');
   const[kasFilter,setKasFilter]=useState('ALL');const[search,setSearch]=useState('');const[editTx,setEditTx]=useState(null);const[showAdd,setShowAdd]=useState(false);
+  const[syncingGas,setSyncingGas]=useState(false);
 
   const isAdmin=currentUser.role==='admin';
   const visProj=projects.filter(p=>isAdmin||currentUser.assignedProjects.includes(p.name)).map(p=>p.name);
@@ -769,9 +797,79 @@ function MainApp({currentUser,onLogout}){
   const txList=useMemo(()=>transactions[proj]||[],[transactions,proj]);
   const m=useMemo(()=>computeMetrics(projData?.total_kontrak||0,txList,projData?.dp_masuk||0),[projData,txList]);
 
-  const handleAdd=async(targetProj,tx)=>{try{await db.addTransaction(targetProj,tx);if(targetProj===proj)await loadTxs(proj);}catch(e){alert('Gagal simpan: '+e.message);}};
-  const handleSave=async tx=>{try{if(editTx?.id){await db.updateTransaction(editTx.id,tx);}else{await db.addTransaction(proj,tx);}await loadTxs(proj);setEditTx(null);}catch(e){alert('Gagal: '+e.message);}};
-  const handleDelete=async id=>{if(!window.confirm('Hapus transaksi ini?'))return;try{await db.deleteTransaction(id);await loadTxs(proj);}catch(e){alert('Gagal hapus: '+e.message);}};
+  // ── Google Sheets Sync Triggers ──
+  const triggerGasSync = async () => {
+    const url = localStorage.getItem('gas_web_app_url');
+    if (!url) return;
+    try {
+      await fetch(url, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'sync',
+          token: 'sb_publishable_wBxny-c-7GFsoIjS9Xaasw_IguFmgWC'
+        })
+      });
+    } catch (e) {
+      console.error('Gagal memicu sync GAS:', e);
+    }
+  };
+
+  const handleSync = async () => {
+    setSyncingGas(true);
+    try {
+      const url = localStorage.getItem('gas_web_app_url');
+      if (url) {
+        await fetch(url, {
+          method: 'POST',
+          body: JSON.stringify({
+            action: 'sync',
+            token: 'sb_publishable_wBxny-c-7GFsoIjS9Xaasw_IguFmgWC'
+          })
+        });
+      }
+    } catch (e) {
+      console.error('Gagal sinkronisasi:', e);
+    } finally {
+      await loadTxs(proj);
+      setSyncingGas(false);
+    }
+  };
+
+  const handleAdd=async(targetProj,tx)=>{
+    try{
+      await db.addTransaction(targetProj,tx);
+      if(targetProj===proj)await loadTxs(proj);
+      triggerGasSync();
+    }catch(e){
+      alert('Gagal simpan: '+e.message);
+    }
+  };
+
+  const handleSave=async tx=>{
+    try{
+      if(editTx?.id){
+        await db.updateTransaction(editTx.id,tx);
+      }else{
+        await db.addTransaction(proj,tx);
+      }
+      await loadTxs(proj);
+      setEditTx(null);
+      triggerGasSync();
+    }catch(e){
+      alert('Gagal: '+e.message);
+    }
+  };
+
+  const handleDelete=async id=>{
+    if(!window.confirm('Hapus transaksi ini?'))return;
+    try{
+      await db.deleteTransaction(id);
+      await loadTxs(proj);
+      triggerGasSync();
+    }catch(e){
+      alert('Gagal hapus: '+e.message);
+    }
+  };
 
   const dlXLS=()=>{
     if (projData?.sheet_gid) {
@@ -1083,7 +1181,9 @@ function MainApp({currentUser,onLogout}){
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"/>
               </div>
-              <button onClick={()=>loadTxs(proj)} title="Refresh Data" className="rounded-xl p-2 text-slate-400 hover:bg-white/5 hover:text-white transition-all"><RefreshCw className="h-4 w-4"/></button>
+              <button onClick={handleSync} disabled={syncingGas} title="Refresh & Sync Data" className="rounded-xl p-2 text-slate-400 hover:bg-white/5 hover:text-white transition-all disabled:opacity-50">
+                <RefreshCw className={`h-4 w-4 ${syncingGas ? 'animate-spin text-cyan-400' : ''}`}/>
+              </button>
             </div>
             
             <div className="flex items-center gap-2.5">
