@@ -181,6 +181,26 @@ function Card({label,value,sub,icon:I,accent,glowClass}){return(<div className={
 
 function FInput({label,v,onChange,type='text',opts}){const cls='w-full rounded-lg border border-white/10 bg-slate-800 px-2 py-1.5 text-white placeholder-slate-500 outline-none focus:border-cyan-400/40';return(<label className="block"><span className="mb-1 block text-[10px] uppercase tracking-wider text-slate-500">{label}</span>{opts?<select value={v} onChange={e=>onChange(e.target.value)} className={cls}>{opts.map(o=><option key={o} className="bg-slate-800">{o}</option>)}</select>:<input type={type} value={v} onChange={e=>onChange(e.target.value)} className={cls}/>}</label>);}
 
+function RowInput({label,v,onChange,type='text',opts,readOnly,customColorClass}){
+  const cls='flex-1 rounded-lg border border-white/10 bg-slate-950 px-3 py-1.5 text-xs text-white placeholder-slate-500 outline-none focus:border-cyan-400/40 min-w-0';
+  return(
+    <div className="flex items-center justify-between gap-3 py-0.5">
+      <span className="text-[11px] font-semibold text-slate-400 w-36 shrink-0">{label}</span>
+      {readOnly ? (
+        <div className={`flex-1 px-3 py-1.5 text-xs font-bold ${customColorClass || 'text-slate-300'}`}>
+          {v}
+        </div>
+      ) : opts ? (
+        <select value={v} onChange={e=>onChange(e.target.value)} className={cls}>
+          {opts.map(o=><option key={o} className="bg-slate-900">{o}</option>)}
+        </select>
+      ) : (
+        <input type={type} value={v} onChange={e=>onChange(e.target.value)} className={cls}/>
+      )}
+    </div>
+  );
+}
+
 /* ─── LOGIN ─── */
 function LoginScreen({onLogin}){
   const[u,setU]=useState('');const[p,setP]=useState('');const[err,setErr]=useState('');const[loading,setLoading]=useState(false);
@@ -359,15 +379,13 @@ const SUGGESTIONS = [
   'transfer 10 juta dari kas utama ke kas awen'
 ];
 
-function FloatingAI({onAdd}){
+function FloatingAI({onAdd, allProjects, currentProject}){
   const[open,setOpen]=useState(false);
   const[text,setText]=useState('');
   const[status,setStatus]=useState('');
   const[messages,setMessages]=useState([
     { sender: 'ai', text: 'Halo! Aku asisten keuangan AI Mrlims. 👑\n\nKirimkan foto kuitansi/nota belanja, atau ketik rincian transaksi secara santai (misal: "beli semen 10 sak seharga 50rb"). Aku siap bantu catat!' }
   ]);
-  const[parsed,setParsed]=useState(null);
-  const[editDetails,setEditDetails]=useState(false);
   const[note,setNote]=useState('');
   const recRef=React.useRef(null);
   const messagesEndRef=React.useRef(null);
@@ -379,8 +397,6 @@ function FloatingAI({onAdd}){
   }, [messages, status]);
 
   const reset=()=>{
-    setParsed(null);
-    setEditDetails(false);
     setNote('');
     setStatus('');
     setMessages([
@@ -420,16 +436,78 @@ function FloatingAI({onAdd}){
 
     try {
       const res = await parseAI(messages, apiInput);
-      setMessages(prev => [...prev, { sender: 'ai', text: res.reply }]);
       if (res.transaction) {
-        setParsed(res.transaction);
-        setEditDetails(false); // Default to clean summary view
+        const draftTx = {
+          ...res.transaction,
+          project: currentProject || (allProjects && allProjects[0]) || ''
+        };
+        setMessages(prev => [...prev, { sender: 'ai', text: res.reply, draft: draftTx }]);
+      } else {
+        setMessages(prev => [...prev, { sender: 'ai', text: res.reply }]);
       }
     } catch (err) {
       setMessages(prev => [...prev, { sender: 'ai', text: 'Aduh maaf, aku mengalami kendala saat memproses pesanmu. Bisa diulang?' }]);
       setNote(err.message || 'Error memproses.');
     } finally {
       setStatus('');
+    }
+  };
+
+  const handleUpdateDraft = (msgIdx, field, value) => {
+    setMessages(prev => prev.map((m, idx) => {
+      if (idx === msgIdx && m.draft) {
+        return {
+          ...m,
+          draft: {
+            ...m.draft,
+            [field]: value
+          }
+        };
+      }
+      return m;
+    }));
+  };
+
+  const handleCancelDraft = (msgIdx) => {
+    setMessages(prev => prev.map((m, idx) => {
+      if (idx === msgIdx) {
+        const { draft, ...rest } = m;
+        return rest;
+      }
+      return m;
+    }));
+  };
+
+  const handleSaveDraft = async (msgIdx) => {
+    const msg = messages[msgIdx];
+    if (!msg || !msg.draft) return;
+    const draft = msg.draft;
+    const total = Math.round(draft.volume * draft.harga_satuan);
+    try {
+      await onAdd(draft.project, {
+        tgl: draft.tgl,
+        desc: draft.desc,
+        volume: draft.volume,
+        satuan: draft.satuan,
+        harga_satuan: draft.harga_satuan,
+        masuk: draft.type === 'Pemasukan' ? total : 0,
+        keluar: draft.type === 'Pengeluaran' ? total : 0,
+        kategori: draft.kategori,
+        kas: draft.kas,
+        tujuan: draft.tujuan || ''
+      });
+      // Remove draft from the message
+      setMessages(prev => prev.map((m, idx) => {
+        if (idx === msgIdx) {
+          const { draft, ...rest } = m;
+          return rest;
+        }
+        return m;
+      }));
+      // Append success message
+      setMessages(prev => [...prev, { sender: 'ai', text: `✅ Siap bos! Transaksi "${draft.desc}" sebesar ${fmt(total)} sudah berhasil dicatat di proyek *${draft.project}* dan disinkronkan ke Google Sheets.` }]);
+    } catch (err) {
+      setNote('Gagal menyimpan transaksi: ' + err.message);
     }
   };
 
@@ -484,25 +562,107 @@ function FloatingAI({onAdd}){
                 <Sparkles className="h-3.5 w-3.5" />
               </div>
             )}
-            <div className={`max-w-[78%] rounded-2xl px-3.5 py-2.5 text-xs whitespace-pre-wrap shadow-lg ${m.sender === 'user' ? 'bg-gradient-to-br from-sky-500 to-cyan-500 text-slate-950 rounded-tr-none font-semibold' : 'bg-slate-800 text-slate-200 rounded-tl-none border border-white/5'}`}>
-              {m.text}
-              
-              {/* SUGGESTION CHIPS FOR GREETING */}
-              {m.sender === 'ai' && idx === 0 && messages.length === 1 && (
-                <div className="mt-4 space-y-2 border-t border-white/5 pt-3">
-                  <p className="text-[9px] uppercase font-bold tracking-wider text-slate-400">Rekomendasi Perintah:</p>
-                  <div className="flex flex-col gap-1.5">
-                    {SUGGESTIONS.map((sug, sidx) => (
-                      <button
-                        key={sidx}
-                        onClick={() => handleSend(sug)}
-                        className="w-full text-left rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2 text-[11px] text-cyan-300 transition hover:bg-white/[0.08] hover:text-cyan-200 flex items-center gap-1.5"
-                      >
-                        <span className="text-cyan-500">✦</span>
-                        <span>"{sug}"</span>
-                      </button>
-                    ))}
+            <div className="flex flex-col gap-2.5 max-w-[78%]">
+              <div className={`rounded-2xl px-3.5 py-2.5 text-xs whitespace-pre-wrap shadow-lg ${m.sender === 'user' ? 'bg-gradient-to-br from-sky-500 to-cyan-500 text-slate-950 rounded-tr-none font-semibold' : 'bg-slate-800 text-slate-200 rounded-tl-none border border-white/5'}`}>
+                {m.text}
+                
+                {/* SUGGESTION CHIPS FOR GREETING */}
+                {m.sender === 'ai' && idx === 0 && messages.length === 1 && (
+                  <div className="mt-4 space-y-2 border-t border-white/5 pt-3">
+                    <p className="text-[9px] uppercase font-bold tracking-wider text-slate-400">Rekomendasi Perintah:</p>
+                    <div className="flex flex-col gap-1.5">
+                      {SUGGESTIONS.map((sug, sidx) => (
+                        <button
+                          key={sidx}
+                          onClick={() => handleSend(sug)}
+                          className="w-full text-left rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2 text-[11px] text-cyan-300 transition hover:bg-white/[0.08] hover:text-cyan-200 flex items-center gap-1.5"
+                        >
+                          <span className="text-cyan-500">✦</span>
+                          <span>"{sug}"</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
+                )}
+              </div>
+
+              {/* INLINE DRAFT PROPOSAL CARD */}
+              {m.sender === 'ai' && m.draft && (
+                <div className="rounded-xl border border-indigo-500/30 bg-slate-950/80 p-4 shadow-2xl flex flex-col gap-3">
+                  <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                    <div className="flex items-center gap-1.5 text-indigo-400">
+                      <Receipt className="h-4 w-4" />
+                      <span className="text-[11px] font-bold uppercase tracking-wider">Konfirmasi Transaksi AI</span>
+                    </div>
+                    <button onClick={() => handleCancelDraft(idx)} className="text-[10px] text-rose-400 hover:underline">Hapus Draft</button>
+                  </div>
+                  
+                  <div className="space-y-2.5">
+                    <RowInput 
+                      label="Tanggal:" 
+                      v={m.draft.tgl} 
+                      type="date" 
+                      onChange={v => handleUpdateDraft(idx, 'tgl', v)} 
+                    />
+                    <RowInput 
+                      label="Deskripsi:" 
+                      v={m.draft.desc} 
+                      onChange={v => handleUpdateDraft(idx, 'desc', v)} 
+                    />
+                    <RowInput 
+                      label="Volume (Qty):" 
+                      v={m.draft.volume} 
+                      type="number" 
+                      onChange={v => handleUpdateDraft(idx, 'volume', Number(v) || 1)} 
+                    />
+                    <RowInput 
+                      label="Satuan:" 
+                      v={m.draft.satuan} 
+                      onChange={v => handleUpdateDraft(idx, 'satuan', v)} 
+                    />
+                    <RowInput 
+                      label="Harga Satuan (IDR):" 
+                      v={m.draft.harga_satuan} 
+                      type="number" 
+                      onChange={v => handleUpdateDraft(idx, 'harga_satuan', Number(v) || 0)} 
+                    />
+                    <RowInput 
+                      label="Total Harga (IDR):" 
+                      v={new Intl.NumberFormat('id-ID').format(m.draft.volume * m.draft.harga_satuan)} 
+                      readOnly={true} 
+                      customColorClass="text-[#ff4b72]" 
+                    />
+                    <RowInput 
+                      label="Kategori Keuangan:" 
+                      v={m.draft.kategori} 
+                      opts={ALL_CATS} 
+                      onChange={v => handleUpdateDraft(idx, 'kategori', v)} 
+                    />
+                    <RowInput 
+                      label="Alur Kas (Payment):" 
+                      v={m.draft.kas} 
+                      opts={KAS_LIST} 
+                      onChange={v => handleUpdateDraft(idx, 'kas', v)} 
+                    />
+                    <RowInput 
+                      label="Target Proyek/Tab:" 
+                      v={m.draft.project} 
+                      opts={allProjects || []} 
+                      onChange={v => handleUpdateDraft(idx, 'project', v)} 
+                    />
+                    <RowInput 
+                      label="Tujuan (Opsional):" 
+                      v={m.draft.tujuan || ''} 
+                      onChange={v => handleUpdateDraft(idx, 'tujuan', v)} 
+                    />
+                  </div>
+
+                  <button 
+                    onClick={() => handleSaveDraft(idx)} 
+                    className="mt-1 w-full rounded-xl bg-indigo-600 hover:bg-indigo-500 py-2.5 text-xs font-bold text-white shadow-lg shadow-indigo-600/10 flex items-center justify-center gap-2 transition"
+                  >
+                    <Check className="h-4 w-4" /> Simpan Ke Ledger
+                  </button>
                 </div>
               )}
             </div>
@@ -528,78 +688,6 @@ function FloatingAI({onAdd}){
         {note&&<div className="rounded-lg bg-rose-500/10 p-3 text-xs text-rose-300">{note}</div>}
         <div ref={messagesEndRef} />
       </div>
-
-      {/* DRAFT PROPOSAL CARD */}
-      {parsed && (
-        <div className="border-t border-white/10 bg-slate-900/95 p-3.5 shadow-2xl max-h-[42vh] overflow-y-auto backdrop-blur-md">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-[10px] font-bold tracking-wider text-cyan-400 uppercase">📝 HASIL ANALISIS AI (DRAFT)</span>
-            <button onClick={() => setParsed(null)} className="text-[10px] text-rose-400 hover:underline">Hapus Draft</button>
-          </div>
-
-          <div className="rounded-xl border border-cyan-400/20 bg-slate-950/40 p-3 shadow-inner">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <span className="rounded bg-cyan-400/10 px-1.5 py-0.5 text-[9px] font-bold text-cyan-400 uppercase tracking-wider">DRAFT TRANSAKSI</span>
-                <h4 className="mt-1 text-xs font-semibold text-white truncate">{parsed.desc || '(Belum ada deskripsi)'}</h4>
-                <p className="text-[10px] text-slate-400 mt-0.5">
-                  {parsed.volume} {parsed.satuan} @ {fmt(parsed.harga_satuan)}
-                </p>
-              </div>
-              <div className="text-right shrink-0">
-                <div className="text-sm font-bold text-cyan-300 tabular-nums">
-                  {fmt(parsed.volume * parsed.harga_satuan)}
-                </div>
-                <div className="mt-1.5 flex gap-1 justify-end">
-                  <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[9px] font-medium text-slate-300 border border-white/5">{parsed.kas}</span>
-                  <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[9px] font-medium text-slate-300 border border-white/5">{parsed.kategori}</span>
-                </div>
-              </div>
-            </div>
-            
-            <button onClick={() => setEditDetails(!editDetails)} className="mt-2 text-[10px] text-slate-400 hover:text-white flex items-center gap-1 transition">
-              <Edit2 className="h-3 w-3" />
-              {editDetails ? 'Sembunyikan Form Edit' : 'Edit Detail Transaksi'}
-            </button>
-          </div>
-
-          {editDetails && (
-            <div className="grid grid-cols-2 gap-2 mt-3 p-2 border border-white/5 rounded-xl bg-white/[0.01]">
-              <FInput label="Tanggal" v={parsed.tgl} type="date" onChange={v=>setParsed({...parsed,tgl:v})}/>
-              <FInput label="Kas" v={parsed.kas} opts={KAS_LIST} onChange={v=>setParsed({...parsed,kas:v})}/>
-              <div className="col-span-2"><FInput label="Deskripsi" v={parsed.desc} onChange={v=>setParsed({...parsed,desc:v})}/></div>
-              <FInput label="Tipe" v={parsed.type} opts={['Pengeluaran','Pemasukan']} onChange={v=>setParsed({...parsed,type:v})}/>
-              <FInput label="Kategori" v={parsed.kategori} opts={ALL_CATS} onChange={v=>setParsed({...parsed,kategori:v})}/>
-              <FInput label="Volume" v={parsed.volume} type="number" onChange={v=>setParsed({...parsed,volume:Number(v)||1})}/>
-              <FInput label="Satuan" v={parsed.satuan} onChange={v=>setParsed({...parsed,satuan:v})}/>
-              <FInput label="Harga Satuan" v={parsed.harga_satuan} type="number" onChange={v=>setParsed({...parsed,harga_satuan:Number(v)||0})}/>
-              <div className="block"><span className="mb-1 block text-[10px] uppercase tracking-wider text-slate-500">Total (Terkunci)</span><div className="w-full rounded-lg border border-white/10 bg-slate-800/50 px-2 py-1.5 text-xs text-slate-400 font-semibold">{fmt(parsed.volume * parsed.harga_satuan)}</div></div>
-              <div className="col-span-2"><FInput label="Tujuan" v={parsed.tujuan} onChange={v=>setParsed({...parsed,tujuan:v})}/></div>
-            </div>
-          )}
-
-          <div className="mt-3 flex gap-2">
-            <button onClick={reset} className="rounded-xl border border-white/10 px-3 py-2 text-xs font-medium text-slate-400 hover:bg-white/5 transition">Reset Chat</button>
-            <button onClick={()=>{
-              const total = Math.round(parsed.volume * parsed.harga_satuan);
-              onAdd({
-                tgl: parsed.tgl,
-                desc: parsed.desc,
-                volume: parsed.volume,
-                satuan: parsed.satuan,
-                harga_satuan: parsed.harga_satuan,
-                masuk: parsed.type === 'Pemasukan' ? total : 0,
-                keluar: parsed.type === 'Pengeluaran' ? total : 0,
-                kategori: parsed.kategori,
-                kas: parsed.kas,
-                tujuan: parsed.tujuan
-              });
-              setMessages(prev => [...prev, { sender: 'ai', text: `✅ Siap bos! Transaksi "${parsed.desc}" sebesar ${fmt(total)} sudah berhasil dicatat dan disinkronkan ke Google Sheets.` }]);
-              setParsed(null);
-            }} className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-emerald-500 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-400 transition"><Check className="h-3.5 w-3.5"/> Simpan Transaksi</button>
-          </div>
-        </div>
-      )}
 
       {/* INPUT PANEL */}
       <div className="border-t border-white/10 p-3 bg-slate-900">
@@ -666,7 +754,7 @@ function MainApp({currentUser,onLogout}){
   const txList=useMemo(()=>transactions[proj]||[],[transactions,proj]);
   const m=useMemo(()=>computeMetrics(projData?.total_kontrak||0,txList,projData?.dp_masuk||0),[projData,txList]);
 
-  const handleAdd=async tx=>{try{await db.addTransaction(proj,tx);await loadTxs(proj);}catch(e){alert('Gagal simpan: '+e.message);}};
+  const handleAdd=async(targetProj,tx)=>{try{await db.addTransaction(targetProj,tx);if(targetProj===proj)await loadTxs(proj);}catch(e){alert('Gagal simpan: '+e.message);}};
   const handleSave=async tx=>{try{if(editTx?.id){await db.updateTransaction(editTx.id,tx);}else{await db.addTransaction(proj,tx);}await loadTxs(proj);setEditTx(null);}catch(e){alert('Gagal: '+e.message);}};
   const handleDelete=async id=>{if(!window.confirm('Hapus transaksi ini?'))return;try{await db.deleteTransaction(id);await loadTxs(proj);}catch(e){alert('Gagal hapus: '+e.message);}};
 
@@ -913,7 +1001,7 @@ function MainApp({currentUser,onLogout}){
       <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] rounded-full bg-cyan-500/10 blur-[120px] pointer-events-none animate-pulse-slow" />
       <div className="absolute top-[30%] left-[20%] w-[350px] h-[350px] rounded-full bg-violet-600/5 blur-[100px] pointer-events-none animate-float-slow" />
 
-      {isAdmin&&<FloatingAI onAdd={handleAdd}/>}
+      {isAdmin&&<FloatingAI onAdd={handleAdd} allProjects={visProj} currentProject={proj}/>}
       {showAdd&&isAdmin&&<FormModal title="Tambah Transaksi" onSave={handleSave} onClose={()=>setShowAdd(false)}/>}
       {editTx&&isAdmin&&<FormModal title="Edit Transaksi" transaction={editTx} onSave={handleSave} onClose={()=>setEditTx(null)}/>}
 
