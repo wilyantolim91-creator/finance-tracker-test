@@ -72,6 +72,10 @@ export const db = {
     if (error) throw error;
     return data || [];
   },
+  async updateProject(id, updates) {
+    const { error } = await supabase.from('projects').update(updates).eq('id', id);
+    if (error) throw error;
+  },
 
   // USER-PROJECT ASSIGNMENT
   async setUserProjects(userId, projectNames) {

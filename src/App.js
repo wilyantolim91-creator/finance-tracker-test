@@ -245,8 +245,68 @@ function UserModal({title,init,allProjects,onSave,onClose,isSelf}){
 }
 
 /* ─── SETTINGS PAGE ─── */
-function SettingsPage({users,allProjects,currentUser,onUsersChange}){
+/* ─── PROJECT MODAL ─── */
+function ProjectModal({project, onSave, onClose}) {
+  const [f, setF] = useState({
+    name: project.name,
+    total_kontrak: project.total_kontrak || 0,
+    dp_masuk: project.dp_masuk || 0,
+    sheet_gid: project.sheet_gid || '',
+    gas_url: project.gas_url || ''
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 p-6 shadow-2xl" onClick={e=>e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-base font-semibold text-white">Edit Proyek: {project.name}</h3>
+          <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-white/10"><X className="h-5 w-5"/></button>
+        </div>
+        <div className="space-y-3">
+          <div>
+            <label className="mb-1 block text-[10px] uppercase tracking-wider text-slate-500">Nama Proyek (Read-Only)</label>
+            <input value={f.name} disabled className="w-full rounded-lg border border-white/10 bg-slate-800/50 px-3 py-2 text-slate-400 text-xs outline-none opacity-60"/>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-[10px] uppercase tracking-wider text-slate-500">Total Kontrak (Rp)</label>
+              <input type="number" value={f.total_kontrak} onChange={e=>setF({...f, total_kontrak: Number(e.target.value) || 0})} className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-white text-xs outline-none focus:border-cyan-400/40"/>
+            </div>
+            <div>
+              <label className="mb-1 block text-[10px] uppercase tracking-wider text-slate-500">DP Masuk (Rp)</label>
+              <input type="number" value={f.dp_masuk} onChange={e=>setF({...f, dp_masuk: Number(e.target.value) || 0})} className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-white text-xs outline-none focus:border-cyan-400/40"/>
+            </div>
+          </div>
+          <div>
+            <label className="mb-1 block text-[10px] uppercase tracking-wider text-slate-500">Sheet GID (ID Tab Google Sheets)</label>
+            <input type="text" placeholder="Contoh: 12345678" value={f.sheet_gid} onChange={e=>setF({...f, sheet_gid: e.target.value})} className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-white text-xs outline-none focus:border-cyan-400/40"/>
+          </div>
+          <div>
+            <label className="mb-1 block text-[10px] uppercase tracking-wider text-slate-500">Google Sheets Web App URL</label>
+            <input type="text" placeholder="https://script.google.com/macros/s/.../exec" value={f.gas_url} onChange={e=>setF({...f, gas_url: e.target.value})} className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-white text-xs outline-none focus:border-cyan-400/40"/>
+          </div>
+        </div>
+        <div className="mt-5 flex gap-3">
+          <button onClick={onClose} className="flex-1 rounded-xl border border-white/10 py-2.5 text-xs font-semibold text-slate-300 hover:bg-white/5">Batal</button>
+          <button onClick={()=>{
+            onSave(project.id, {
+              total_kontrak: f.total_kontrak,
+              dp_masuk: f.dp_masuk,
+              sheet_gid: f.sheet_gid,
+              gas_url: f.gas_url
+            });
+            onClose();
+          }} className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-500 py-2.5 text-xs font-bold text-slate-950 hover:bg-emerald-400"><Check className="h-4 w-4"/> Simpan</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── SETTINGS PAGE ─── */
+function SettingsPage({users,allProjects,projects = [],currentUser,onUsersChange,onProjectsChange}){
   const[addOpen,setAddOpen]=useState(false);const[editUser,setEditUser]=useState(null);const[toast,setToast]=useState('');
+  const [editProject, setEditProject] = useState(null);
   const [geminiKey, setGeminiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
   const [gasUrl, setGasUrl] = useState(() => localStorage.getItem('gas_web_app_url') || '');
   
@@ -259,13 +319,27 @@ function SettingsPage({users,allProjects,currentUser,onUsersChange}){
     localStorage.setItem('gas_web_app_url', gasUrl.trim());
     showToast('Google Sheets Web App URL berhasil disimpan.');
   };
+
+  const handleEditProject = async (projId, updates) => {
+    try {
+      await db.updateProject(projId, updates);
+      onProjectsChange();
+      showToast('Project berhasil diupdate.');
+    } catch(e) {
+      showToast('Gagal update project: ' + e.message);
+    }
+  };
+
   const handleAdd=async f=>{if(!f.username||!f.password){showToast('Username & password wajib.');return;}if(users.find(u=>u.username===f.username)){showToast('Username sudah ada.');return;}try{const newU=await db.addUser(f.username,f.password,f.role);await db.setUserProjects(newU.id,f.role==='admin'?[]:f.assignedProjects);onUsersChange();showToast(`User "${f.username}" ditambahkan.`);}catch(e){showToast('Gagal: '+e.message);}};
   const handleEdit=async(uid,uname,f)=>{try{const upd={role:f.isSelf?undefined:f.role};if(f.password)upd.password=f.password;Object.keys(upd).forEach(k=>upd[k]===undefined&&delete upd[k]);if(Object.keys(upd).length>0)await db.updateUser(uid,upd);if(!f.isSelf||f.role!=='admin')await db.setUserProjects(uid,f.role==='admin'?[]:f.assignedProjects);onUsersChange();showToast(`User "${uname}" diupdate.`);}catch(e){showToast('Gagal: '+e.message);}};
   const handleDel=async(uid,uname)=>{if(uname==='admin'||uname===currentUser.username){showToast('Tidak bisa hapus akun ini.');return;}try{await db.deleteUser(uid);onUsersChange();showToast(`User "${uname}" dihapus.`);}catch(e){showToast('Gagal: '+e.message);}};
+  
   return(<div className="space-y-5">
     {toast&&<div className="fixed bottom-24 left-1/2 z-50 -translate-x-1/2 whitespace-nowrap rounded-xl bg-slate-700 px-5 py-2.5 text-sm text-white shadow-xl">{toast}</div>}
     {addOpen&&<UserModal title="Tambah Staff" allProjects={allProjects} onSave={handleAdd} onClose={()=>setAddOpen(false)}/>}
     {editUser&&<UserModal title={`Edit: ${editUser.username}`} allProjects={allProjects} isSelf={editUser.username===currentUser.username} init={{username:editUser.username,password:'',role:editUser.role,assignedProjects:editUser.assignedProjects||[]}} onSave={f=>handleEdit(editUser.id,editUser.username,f)} onClose={()=>setEditUser(null)}/>}
+    {editProject&&<ProjectModal project={editProject} onSave={handleEditProject} onClose={()=>setEditProject(null)}/>}
+    
     <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-5">
       <div className="mb-3 flex items-center gap-2"><KeyRound className="h-4 w-4 text-cyan-400"/><span className="text-sm font-semibold text-white">Akun Saya</span></div>
       <div className="flex items-center justify-between">
@@ -273,6 +347,7 @@ function SettingsPage({users,allProjects,currentUser,onUsersChange}){
         <button onClick={()=>setEditUser(users.find(u=>u.id===currentUser.id))} className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/10"><KeyRound className="h-3.5 w-3.5"/> Ganti Password</button>
       </div>
     </div>
+    
     <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-5">
       <div className="mb-3 flex items-center gap-2"><Sparkles className="h-4 w-4 text-cyan-400"/><span className="text-sm font-semibold text-white">Konfigurasi AI Assistant</span></div>
       <div className="space-y-3">
@@ -294,10 +369,11 @@ function SettingsPage({users,allProjects,currentUser,onUsersChange}){
         </div>
       </div>
     </div>
+    
     <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-5">
-      <div className="mb-3 flex items-center gap-2"><RefreshCw className="h-4 w-4 text-cyan-400"/><span className="text-sm font-semibold text-white">Konfigurasi Google Sheets Sync</span></div>
+      <div className="mb-3 flex items-center gap-2"><RefreshCw className="h-4 w-4 text-cyan-400"/><span className="text-sm font-semibold text-white">Konfigurasi Google Sheets Sync (Lokal)</span></div>
       <div className="space-y-3">
-        <p className="text-xs text-slate-400">Masukkan URL Web App Google Apps Script Anda untuk sinkronisasi 2 arah otomatis (App ↔ Google Sheets) secara instan.</p>
+        <p className="text-xs text-slate-400">URL Web App Google Apps Script default untuk perangkat ini (disimpan secara lokal di browser Anda).</p>
         <div className="flex gap-2">
           <input
             type="text"
@@ -315,6 +391,50 @@ function SettingsPage({users,allProjects,currentUser,onUsersChange}){
         </div>
       </div>
     </div>
+
+    {/* MANAJEMEN PROYEK (DATABASE-BACKED) */}
+    <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-5">
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-2"><RefreshCw className="h-4 w-4 text-cyan-400"/><span className="text-sm font-semibold text-white">Manajemen Proyek & Google Sheets Sync</span></div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
+              <th className="pb-3 pr-4">Nama Proyek</th>
+              <th className="pb-3 pr-4">Kontrak</th>
+              <th className="pb-3 pr-4">DP Masuk</th>
+              <th className="pb-3 pr-4">Sheet GID</th>
+              <th className="pb-3 pr-4">Google Sheets Sync URL (Database)</th>
+              <th className="pb-3 text-center">Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            {projects.map(p => (
+              <tr key={p.id} className="border-t border-white/5">
+                <td className="py-3 pr-4 text-xs font-semibold text-white">{p.name}</td>
+                <td className="py-3 pr-4 text-xs text-slate-300 tabular-nums">{"Rp " + new Intl.NumberFormat('id-ID').format(p.total_kontrak || 0)}</td>
+                <td className="py-3 pr-4 text-xs text-slate-300 tabular-nums">{"Rp " + new Intl.NumberFormat('id-ID').format(p.dp_masuk || 0)}</td>
+                <td className="py-3 pr-4 text-xs text-slate-400 font-mono">{p.sheet_gid || '-'}</td>
+                <td className="py-3 pr-4 text-xs text-slate-400 font-mono max-w-[200px] truncate" title={p.gas_url}>
+                  {p.gas_url ? p.gas_url.substring(0, 30) + '...' : <span className="text-slate-600">Belum diset (menggunakan URL Lokal)</span>}
+                </td>
+                <td className="py-3 text-center">
+                  <button 
+                    onClick={() => setEditProject(p)} 
+                    className="rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-cyan-300"
+                    title="Edit Proyek"
+                  >
+                    <Edit2 className="h-3.5 w-3.5"/>
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    
     <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-5">
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2"><Users className="h-4 w-4 text-cyan-400"/><span className="text-sm font-semibold text-white">Manajemen User</span></div>
@@ -799,9 +919,9 @@ function MainApp({currentUser,onLogout}){
 
   // ── Google Sheets Sync Triggers ──
   const triggerGasSync = async () => {
-    const url = localStorage.getItem('gas_web_app_url');
+    const url = projData?.gas_url || localStorage.getItem('gas_web_app_url');
     if (!url) {
-      console.warn('Google Sheets Web App URL belum dikonfigurasi di Pengaturan.');
+      console.warn('Google Sheets Web App URL belum dikonfigurasi.');
       return;
     }
     try {
@@ -822,9 +942,9 @@ function MainApp({currentUser,onLogout}){
   };
 
   const handleSync = async () => {
-    const url = localStorage.getItem('gas_web_app_url');
+    const url = projData?.gas_url || localStorage.getItem('gas_web_app_url');
     if (!url) {
-      alert('Google Sheets Web App URL belum dikonfigurasi! Silakan buka tab Pengaturan (Settings) untuk memasukkan URL Web App Google Apps Script Anda agar sinkronisasi dapat berjalan.');
+      alert('Google Sheets Web App URL belum dikonfigurasi! Silakan hubungi Admin untuk mengatur URL sinkronisasi Google Sheets untuk proyek ini.');
       await loadTxs(proj);
       return;
     }
@@ -843,7 +963,7 @@ function MainApp({currentUser,onLogout}){
       }
     } catch (e) {
       console.error('Gagal sinkronisasi:', e);
-      alert('Gagal menghubungi Google Sheets Web App. Pastikan URL sudah benar di tab Pengaturan dan hak akses deployment Google Apps Script diatur sebagai "Anyone".');
+      alert('Gagal menghubungi Google Sheets Web App. Pastikan URL sudah benar di pengaturan proyek dan hak akses deployment Google Apps Script diatur sebagai "Anyone".');
     } finally {
       await loadTxs(proj);
       setSyncingGas(false);
@@ -1213,7 +1333,7 @@ function MainApp({currentUser,onLogout}){
           </header>
 
           <div className="py-4 pb-28 animate-fade-in-up">
-            {tab==='settings'&&isAdmin&&<SettingsPage users={users} allProjects={projects.map(p=>p.name)} currentUser={currentUser} onUsersChange={loadAll}/>}
+            {tab==='settings'&&isAdmin&&<SettingsPage users={users} allProjects={projects.map(p=>p.name)} projects={projects} currentUser={currentUser} onUsersChange={loadAll} onProjectsChange={loadAll}/>}
 
             {tab==='dashboard'&&<div className="space-y-6">
               {/* Cards Grid */}
