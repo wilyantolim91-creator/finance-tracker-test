@@ -948,49 +948,44 @@ function MainApp({currentUser,onLogout}){
 
   // ── Google Sheets Sync Triggers ──
   const triggerGasSync = async () => {
-    // Web App proxy URL (new deployment)
     const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxlevTOkjKO6HDQxcCGObGxSGuT4IgZWXFr-WdhnOkoKGzOklfDrrbgi_020u_SaTHl6g/exec';
+    const pName = (proj || 'KARANTINA 59').toLowerCase().replace(/\s+/g, '-');
     
     try {
       const response = await fetch(WEB_APP_URL, {
         method: 'POST',
-        body: JSON.stringify({
-          action: 'sync',
-          projectName: proj || 'karantina-59'
-        })
+        body: JSON.stringify({ action: 'sync', projectName: pName })
       });
       const data = await response.json();
       if (data.status === 'success') {
-        console.log('✅ Instant sync ke Google Sheets berhasil!', data);
+        console.log('✅ Instant sync berhasil!', data);
       } else {
-        console.error('Google Sheets Sync Error:', data.message);
+        console.error('Sync Error:', data.message);
       }
     } catch (e) {
-      console.error('Gagal memicu instant sync:', e);
+      console.error('Gagal instant sync:', e);
     }
   };
 
   const handleSync = async () => {
     const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxlevTOkjKO6HDQxcCGObGxSGuT4IgZWXFr-WdhnOkoKGzOklfDrrbgi_020u_SaTHl6g/exec';
+    const pName = (proj || 'KARANTINA 59').toLowerCase().replace(/\s+/g, '-');
     
     setSyncingGas(true);
     try {
       const response = await fetch(WEB_APP_URL, {
         method: 'POST',
-        body: JSON.stringify({
-          action: 'sync',
-          projectName: proj || 'karantina-59'
-        })
+        body: JSON.stringify({ action: 'sync', projectName: pName })
       });
       const data = await response.json();
       if (data.status !== 'success') {
-        alert('Gagal sinkronisasi Google Sheets: ' + (data.message || 'Terjadi kesalahan'));
+        alert('Gagal sync: ' + (data.message || 'Error'));
       } else {
-        alert('✅ Sinkronisasi berhasil! ' + data.message);
+        alert('✅ Sync berhasil! ' + data.message);
       }
     } catch (e) {
-      console.error('Gagal sinkronisasi:', e);
-      alert('Gagal menghubungi Web App. Periksa browser console untuk detail error.');
+      console.error('Gagal sync:', e);
+      alert('Gagal menghubungi Web App.');
     } finally {
       await loadTxs(proj);
       setSyncingGas(false);
