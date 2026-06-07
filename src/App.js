@@ -800,35 +800,50 @@ function MainApp({currentUser,onLogout}){
   // ── Google Sheets Sync Triggers ──
   const triggerGasSync = async () => {
     const url = localStorage.getItem('gas_web_app_url');
-    if (!url) return;
+    if (!url) {
+      console.warn('Google Sheets Web App URL belum dikonfigurasi di Pengaturan.');
+      return;
+    }
     try {
-      await fetch(url, {
+      const response = await fetch(url, {
         method: 'POST',
         body: JSON.stringify({
           action: 'sync',
           token: 'sb_publishable_wBxny-c-7GFsoIjS9Xaasw_IguFmgWC'
         })
       });
+      const data = await response.json();
+      if (!data.success) {
+        console.error('Google Sheets Sync Error:', data.error);
+      }
     } catch (e) {
       console.error('Gagal memicu sync GAS:', e);
     }
   };
 
   const handleSync = async () => {
+    const url = localStorage.getItem('gas_web_app_url');
+    if (!url) {
+      alert('Google Sheets Web App URL belum dikonfigurasi! Silakan buka tab Pengaturan (Settings) untuk memasukkan URL Web App Google Apps Script Anda agar sinkronisasi dapat berjalan.');
+      await loadTxs(proj);
+      return;
+    }
     setSyncingGas(true);
     try {
-      const url = localStorage.getItem('gas_web_app_url');
-      if (url) {
-        await fetch(url, {
-          method: 'POST',
-          body: JSON.stringify({
-            action: 'sync',
-            token: 'sb_publishable_wBxny-c-7GFsoIjS9Xaasw_IguFmgWC'
-          })
-        });
+      const response = await fetch(url, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'sync',
+          token: 'sb_publishable_wBxny-c-7GFsoIjS9Xaasw_IguFmgWC'
+        })
+      });
+      const data = await response.json();
+      if (!data.success) {
+        alert('Gagal sinkronisasi Google Sheets: ' + (data.error || 'Terjadi kesalahan'));
       }
     } catch (e) {
       console.error('Gagal sinkronisasi:', e);
+      alert('Gagal menghubungi Google Sheets Web App. Pastikan URL sudah benar di tab Pengaturan dan hak akses deployment Google Apps Script diatur sebagai "Anyone".');
     } finally {
       await loadTxs(proj);
       setSyncingGas(false);
