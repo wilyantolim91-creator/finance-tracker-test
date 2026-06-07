@@ -227,7 +227,16 @@ function LoginScreen({onLogin}){
 function UserModal({title,init,allProjects,onSave,onClose,isSelf}){
   const[f,setF]=useState(init||{username:'',password:'',role:'staff',assignedProjects:[]});
   const toggle=pr=>setF(x=>({...x,assignedProjects:x.assignedProjects.includes(pr)?x.assignedProjects.filter(q=>q!==pr):[...x.assignedProjects,pr]}));
-  return(<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+  const clickStartedOnBackdrop = React.useRef(false);
+  return(<div 
+    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" 
+    onMouseDown={e => { clickStartedOnBackdrop.current = (e.target === e.currentTarget); }}
+    onMouseUp={e => {
+      if (clickStartedOnBackdrop.current && e.target === e.currentTarget) {
+        onClose();
+      }
+    }}
+  >
     <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 p-6 shadow-2xl" onClick={e=>e.stopPropagation()}>
       <div className="mb-5 flex items-center justify-between"><h3 className="text-base font-semibold text-white">{title}</h3><button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-white/10"><X className="h-5 w-5"/></button></div>
       <div className="space-y-3">
@@ -249,14 +258,23 @@ function UserModal({title,init,allProjects,onSave,onClose,isSelf}){
 function ProjectModal({project, onSave, onClose}) {
   const [f, setF] = useState({
     name: project.name,
-    total_kontrak: project.total_kontrak || 0,
-    dp_masuk: project.dp_masuk || 0,
+    total_kontrak: project.total_kontrak !== undefined && project.total_kontrak !== null ? String(project.total_kontrak) : '0',
+    dp_masuk: project.dp_masuk !== undefined && project.dp_masuk !== null ? String(project.dp_masuk) : '0',
     sheet_gid: project.sheet_gid || '',
     gas_url: project.gas_url || ''
   });
+  const clickStartedOnBackdrop = React.useRef(false);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" 
+      onMouseDown={e => { clickStartedOnBackdrop.current = (e.target === e.currentTarget); }}
+      onMouseUp={e => {
+        if (clickStartedOnBackdrop.current && e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 p-6 shadow-2xl" onClick={e=>e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-base font-semibold text-white">Edit Proyek: {project.name}</h3>
@@ -270,11 +288,11 @@ function ProjectModal({project, onSave, onClose}) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-[10px] uppercase tracking-wider text-slate-500">Total Kontrak (Rp)</label>
-              <input type="number" value={f.total_kontrak} onChange={e=>setF({...f, total_kontrak: Number(e.target.value) || 0})} className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-white text-xs outline-none focus:border-cyan-400/40"/>
+              <input type="number" value={f.total_kontrak} onChange={e=>setF({...f, total_kontrak: e.target.value})} className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-white text-xs outline-none focus:border-cyan-400/40"/>
             </div>
             <div>
               <label className="mb-1 block text-[10px] uppercase tracking-wider text-slate-500">DP Masuk (Rp)</label>
-              <input type="number" value={f.dp_masuk} onChange={e=>setF({...f, dp_masuk: Number(e.target.value) || 0})} className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-white text-xs outline-none focus:border-cyan-400/40"/>
+              <input type="number" value={f.dp_masuk} onChange={e=>setF({...f, dp_masuk: e.target.value})} className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-white text-xs outline-none focus:border-cyan-400/40"/>
             </div>
           </div>
           <div>
@@ -290,8 +308,8 @@ function ProjectModal({project, onSave, onClose}) {
           <button onClick={onClose} className="flex-1 rounded-xl border border-white/10 py-2.5 text-xs font-semibold text-slate-300 hover:bg-white/5">Batal</button>
           <button onClick={()=>{
             onSave(project.id, {
-              total_kontrak: f.total_kontrak,
-              dp_masuk: f.dp_masuk,
+              total_kontrak: Number(f.total_kontrak) || 0,
+              dp_masuk: Number(f.dp_masuk) || 0,
               sheet_gid: f.sheet_gid,
               gas_url: f.gas_url
             });
@@ -461,9 +479,9 @@ function FormModal({title,transaction,onSave,onClose}){
       return {
         tgl: transaction.tgl || TODAY(),
         desc: transaction.desc || '',
-        volume: transaction.volume || 1,
+        volume: transaction.volume !== undefined && transaction.volume !== null ? String(transaction.volume) : '1',
         satuan: transaction.satuan || 'ls',
-        harga_satuan: transaction.harga_satuan || 0,
+        harga_satuan: transaction.harga_satuan !== undefined && transaction.harga_satuan !== null ? String(transaction.harga_satuan) : '0',
         type: isIncome ? 'Pemasukan' : 'Pengeluaran',
         tujuan: transaction.tujuan || '',
         kategori: transaction.kategori || 'Material',
@@ -473,38 +491,49 @@ function FormModal({title,transaction,onSave,onClose}){
     return {
       tgl: TODAY(),
       desc: '',
-      volume: 1,
+      volume: '1',
       satuan: 'ls',
-      harga_satuan: 0,
+      harga_satuan: '0',
       type: 'Pengeluaran',
       tujuan: '',
       kategori: 'Material',
       kas: 'KAS UTAMA'
     };
   });
+  const clickStartedOnBackdrop = React.useRef(false);
 
-  return(<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+  return(<div 
+    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" 
+    onMouseDown={e => { clickStartedOnBackdrop.current = (e.target === e.currentTarget); }}
+    onMouseUp={e => {
+      if (clickStartedOnBackdrop.current && e.target === e.currentTarget) {
+        onClose();
+      }
+    }}
+  >
     <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 p-6" onClick={e=>e.stopPropagation()}>
       <div className="mb-4 flex items-center justify-between"><h3 className="text-base font-semibold text-white">{title}</h3><button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-white/10"><X className="h-5 w-5"/></button></div>
       <div className="grid grid-cols-2 gap-3">
         <FInput label="Tanggal" v={f.tgl} type="date" onChange={v=>setF({...f,tgl:v})}/><FInput label="Kas" v={f.kas} opts={KAS_LIST} onChange={v=>setF({...f,kas:v})}/>
         <div className="col-span-2"><FInput label="Deskripsi" v={f.desc} onChange={v=>setF({...f,desc:v})}/></div>
         <FInput label="Tipe" v={f.type} opts={['Pengeluaran','Pemasukan']} onChange={v=>setF({...f,type:v})}/><FInput label="Kategori" v={f.kategori} opts={ALL_CATS} onChange={v=>setF({...f,kategori:v})}/>
-        <FInput label="Volume" v={f.volume} type="number" onChange={v=>setF({...f,volume:Number(v)||1})}/><FInput label="Satuan" v={f.satuan} onChange={v=>setF({...f,satuan:v})}/>
-        <FInput label="Harga Satuan" v={f.harga_satuan} type="number" onChange={v=>setF({...f,harga_satuan:Number(v)||0})}/>
-        <div className="block"><span className="mb-1 block text-[10px] uppercase tracking-wider text-slate-500">Total (Terkunci)</span><div className="w-full rounded-lg border border-white/10 bg-slate-800/50 px-2 py-1.5 text-xs text-slate-400 font-semibold">{fmt(f.volume * f.harga_satuan)}</div></div>
+        <FInput label="Volume" v={f.volume} type="number" onChange={v=>setF({...f,volume:v})}/><FInput label="Satuan" v={f.satuan} onChange={v=>setF({...f,satuan:v})}/>
+        <FInput label="Harga Satuan" v={f.harga_satuan} type="number" onChange={v=>setF({...f,harga_satuan:v})}/>
+        <div className="block"><span className="mb-1 block text-[10px] uppercase tracking-wider text-slate-500">Total (Terkunci)</span><div className="w-full rounded-lg border border-white/10 bg-slate-800/50 px-2 py-1.5 text-xs text-slate-400 font-semibold">{fmt((Number(f.volume) || 0) * (Number(f.harga_satuan) || 0))}</div></div>
         <div className="col-span-2"><FInput label="Tujuan" v={f.tujuan||''} onChange={v=>setF({...f,tujuan:v})}/></div>
       </div>
       <div className="mt-5 flex gap-3">
         <button onClick={onClose} className="flex-1 rounded-xl border border-white/10 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5">Batal</button>
         <button onClick={()=>{
-          const total = Math.round(f.volume * f.harga_satuan);
+          const volNum = Number(f.volume) || 1;
+          const hsNum = Number(f.harga_satuan) || 0;
+          const total = Math.round(volNum * hsNum);
           onSave({
             tgl: f.tgl,
             desc: f.desc,
-            volume: f.volume,
+            volume: volNum,
             satuan: f.satuan,
-            harga_satuan: f.harga_satuan,
+            harga_satuan: hsNum,
             masuk: f.type === 'Pemasukan' ? total : 0,
             keluar: f.type === 'Pengeluaran' ? total : 0,
             kategori: f.kategori,
