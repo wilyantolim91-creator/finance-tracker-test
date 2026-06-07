@@ -1,7 +1,21 @@
 import { supabase } from './supabaseConfig';
 
 function mapTx(t) {
-  return { id: t.id, tgl: t.tgl, desc: t.deskripsi, masuk: t.masuk, keluar: t.keluar, kategori: t.kategori, kas: t.kas, tujuan: t.tujuan || '', sync_source: t.sync_source || '', updated_at: t.updated_at || '' };
+  return {
+    id: t.id,
+    tgl: t.tgl,
+    desc: t.deskripsi,
+    volume: t.volume !== undefined && t.volume !== null ? Number(t.volume) : 1,
+    satuan: t.satuan || 'ls',
+    harga_satuan: t.harga_satuan !== undefined && t.harga_satuan !== null ? Number(t.harga_satuan) : 0,
+    masuk: t.masuk,
+    keluar: t.keluar,
+    kategori: t.kategori,
+    kas: t.kas,
+    tujuan: t.tujuan || '',
+    sync_source: t.sync_source || '',
+    updated_at: t.updated_at || ''
+  };
 }
 
 export const db = {
@@ -77,6 +91,7 @@ export const db = {
     if (!proj) throw new Error('Project tidak ditemukan');
     const { data, error } = await supabase.from('transactions').insert({
       project_id: proj.id, tgl: tx.tgl, deskripsi: tx.desc,
+      volume: tx.volume || 1, satuan: tx.satuan || 'ls', harga_satuan: tx.harga_satuan || 0,
       masuk: tx.masuk || 0, keluar: tx.keluar || 0, kategori: tx.kategori, kas: tx.kas, tujuan: tx.tujuan || '', sync_source: 'app'
     }).select().single();
     if (error) throw error;
@@ -84,8 +99,9 @@ export const db = {
   },
   async updateTransaction(id, tx) {
     const { error } = await supabase.from('transactions').update({
-      tgl: tx.tgl, deskripsi: tx.desc, masuk: tx.masuk || 0,
-      keluar: tx.keluar || 0, kategori: tx.kategori, kas: tx.kas, tujuan: tx.tujuan || '', sync_source: 'app'
+      tgl: tx.tgl, deskripsi: tx.desc,
+      volume: tx.volume || 1, satuan: tx.satuan || 'ls', harga_satuan: tx.harga_satuan || 0,
+      masuk: tx.masuk || 0, keluar: tx.keluar || 0, kategori: tx.kategori, kas: tx.kas, tujuan: tx.tujuan || '', sync_source: 'app'
     }).eq('id', id);
     if (error) throw error;
   },

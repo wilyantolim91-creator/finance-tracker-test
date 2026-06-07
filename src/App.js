@@ -35,24 +35,27 @@ function computeMetrics(totalKontrak, txs=[], dpMasukDb=0) {
   return{totalKontrak,dpMasuk,sisaPembayaran:totalKontrak-dpMasuk,perKas,perKat,totalBiaya,saldoAkhir,txs:[...sorted].reverse()};
 }
 
-/* ─── AI PARSER ─── */
 const SYS=()=>`Kamu adalah parser transaksi keuangan cerdas. Analisis input pengguna (teks/gambar) untuk mengekstrak data transaksi dalam format JSON.
 Aturan:
 1. Jenis Transaksi:
    - Jika kalimat mengandung kata bermakna pengeluaran (misal: 'beli', 'bayar', 'upah', 'belanja', 'ongkir', 'gaji', 'keluar', 'ambil'), maka ini adalah pengeluaran. Set masuk=0 dan keluar=[nominal/0 jika tidak disebutkan].
    - Jika kalimat mengandung kata bermakna pemasukan (misal: 'terima', 'dp', 'masuk', 'pembayaran dari klien', 'transfer masuk'), maka ini adalah pemasukan. Set keluar=0 dan masuk=[nominal/0 jika tidak disebutkan].
    - Jika transfer kas/dana (misal: 'transfer ke kas awen', 'pindah saldo ke kas wily'), set kategori='Transfer' atau 'Transfer Internal'.
-2. Nominal Uang:
-   - Ekstrak harga/nominal uang. Konversikan singkatan: jt=1000000 (misal 1.5jt = 1500000) dan rb=1000 (misal 500rb = 500000).
-   - JANGAN menginterpretasikan kuantitas barang sebagai harga nominal (misal: 'beli semen 10 sak' -> angka 10 adalah kuantitas barang, bukan harga semen. Jika harga tidak disebutkan, set keluar=0 dan masuk=0 agar pengguna bisa mengisi manual).
+2. Kuantitas, Satuan, dan Harga:
+   - volume: jumlah/kuantitas barang atau jasa (number, default 1). Contoh: '10 sak semen' -> volume: 10.
+   - satuan: satuan barang/jasa (string, default 'ls', misal 'sak', 'pcs', 'hari', 'm2', 'orang').
+   - harga_satuan: harga per unit barang/jasa (number, default 0 jika tidak ada harga, atau dihitung dari total dibagi volume jika hanya total yang disebutkan).
 3. Field Output JSON:
    - tgl: format YYYY-MM-DD (default hari ini: ${TODAY()}).
    - desc: buat ringkasan deskripsi yang informatif (misal: 'Beli semen 10 sak').
-   - masuk: nominal pemasukan (number), default 0.
-   - keluar: nominal pengeluaran (number), default 0.
+   - masuk: nominal total pemasukan (number), default 0.
+   - keluar: nominal total pengeluaran (number), default 0.
    - kategori: pilih salah satu dari [${ALL_CATS.join(', ')}] secara cerdas. Semen/pasir/cat -> Material. Gaji/upah -> Upah atau Labor.
    - kas: pilih salah satu dari [${KAS_LIST.join(', ')}]. Jika tidak disebutkan, default ke 'KAS UTAMA'.
    - tujuan: tujuan pembayaran atau supplier (misal: 'Supplier', 'Tukang', atau kas tujuan jika transfer).
+   - volume: kuantitas (number).
+   - satuan: satuan (string).
+   - harga_satuan: harga per unit (number).
 
 Hanya hasilkan string JSON valid tanpa penjelasan tambahan.`;
 async function parseAI(content){
@@ -113,11 +116,28 @@ async function parseAI(content){
   const d = await r.json();
   const raw = d.candidates[0].content.parts[0].text.trim();
   const o = JSON.parse(raw);
+  
+  const isIncome = (Number(o.masuk) || 0) > 0;
+  const type = isIncome ? 'Pemasukan' : 'Pengeluaran';
+  const vol = Number(o.volume) || 1;
+  const sat = o.satuan || 'ls';
+  let hs = Number(o.harga_satuan) || 0;
+  
+  // Hitung fallback harga_satuan jika tidak diekstrak eksplisit tapi ada total
+  if (hs === 0) {
+    const total = isIncome ? (Number(o.masuk) || 0) : (Number(o.keluar) || 0);
+    if (total > 0) {
+      hs = Math.round(total / vol);
+    }
+  }
+  
   return {
     tgl: o.tgl || TODAY(),
     desc: o.desc || '',
-    masuk: Number(o.masuk) || 0,
-    keluar: Number(o.keluar) || 0,
+    volume: vol,
+    satuan: sat,
+    harga_satuan: hs,
+    type: type,
     kategori: ALL_CATS.includes(o.kategori) ? o.kategori : 'Lainnya',
     kas: KAS_LIST.includes(o.kas) ? o.kas : 'KAS UTAMA',
     tujuan: o.tujuan || ''
@@ -239,19 +259,64 @@ function SettingsPage({users,allProjects,currentUser,onUsersChange}){
 
 /* ─── FORM MODAL ─── */
 function FormModal({title,transaction,onSave,onClose}){
-  const[f,setF]=useState(transaction||{tgl:TODAY(),desc:'',masuk:0,keluar:0,kategori:'Material',kas:'KAS UTAMA',tujuan:''});
+  const [f, setF] = useState(() => {
+    if (transaction) {
+      const isIncome = transaction.masuk > 0;
+      return {
+        tgl: transaction.tgl || TODAY(),
+        desc: transaction.desc || '',
+        volume: transaction.volume || 1,
+        satuan: transaction.satuan || 'ls',
+        harga_satuan: transaction.harga_satuan || 0,
+        type: isIncome ? 'Pemasukan' : 'Pengeluaran',
+        tujuan: transaction.tujuan || '',
+        kategori: transaction.kategori || 'Material',
+        kas: transaction.kas || 'KAS UTAMA'
+      };
+    }
+    return {
+      tgl: TODAY(),
+      desc: '',
+      volume: 1,
+      satuan: 'ls',
+      harga_satuan: 0,
+      type: 'Pengeluaran',
+      tujuan: '',
+      kategori: 'Material',
+      kas: 'KAS UTAMA'
+    };
+  });
+
   return(<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
     <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 p-6" onClick={e=>e.stopPropagation()}>
       <div className="mb-4 flex items-center justify-between"><h3 className="text-base font-semibold text-white">{title}</h3><button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-white/10"><X className="h-5 w-5"/></button></div>
       <div className="grid grid-cols-2 gap-3">
         <FInput label="Tanggal" v={f.tgl} type="date" onChange={v=>setF({...f,tgl:v})}/><FInput label="Kas" v={f.kas} opts={KAS_LIST} onChange={v=>setF({...f,kas:v})}/>
         <div className="col-span-2"><FInput label="Deskripsi" v={f.desc} onChange={v=>setF({...f,desc:v})}/></div>
-        <FInput label="Kategori" v={f.kategori} opts={ALL_CATS} onChange={v=>setF({...f,kategori:v})}/><FInput label="Tujuan" v={f.tujuan||''} onChange={v=>setF({...f,tujuan:v})}/>
-        <FInput label="Masuk" v={f.masuk} type="number" onChange={v=>setF({...f,masuk:Number(v)||0})}/><FInput label="Keluar" v={f.keluar} type="number" onChange={v=>setF({...f,keluar:Number(v)||0})}/>
+        <FInput label="Tipe" v={f.type} opts={['Pengeluaran','Pemasukan']} onChange={v=>setF({...f,type:v})}/><FInput label="Kategori" v={f.kategori} opts={ALL_CATS} onChange={v=>setF({...f,kategori:v})}/>
+        <FInput label="Volume" v={f.volume} type="number" onChange={v=>setF({...f,volume:Number(v)||1})}/><FInput label="Satuan" v={f.satuan} onChange={v=>setF({...f,satuan:v})}/>
+        <FInput label="Harga Satuan" v={f.harga_satuan} type="number" onChange={v=>setF({...f,harga_satuan:Number(v)||0})}/>
+        <div className="block"><span className="mb-1 block text-[10px] uppercase tracking-wider text-slate-500">Total (Terkunci)</span><div className="w-full rounded-lg border border-white/10 bg-slate-800/50 px-2 py-1.5 text-xs text-slate-400 font-semibold">{fmt(f.volume * f.harga_satuan)}</div></div>
+        <div className="col-span-2"><FInput label="Tujuan" v={f.tujuan||''} onChange={v=>setF({...f,tujuan:v})}/></div>
       </div>
       <div className="mt-5 flex gap-3">
         <button onClick={onClose} className="flex-1 rounded-xl border border-white/10 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5">Batal</button>
-        <button onClick={()=>{onSave(f);onClose();}} className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-500 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400"><Check className="h-4 w-4"/> Simpan</button>
+        <button onClick={()=>{
+          const total = Math.round(f.volume * f.harga_satuan);
+          onSave({
+            tgl: f.tgl,
+            desc: f.desc,
+            volume: f.volume,
+            satuan: f.satuan,
+            harga_satuan: f.harga_satuan,
+            masuk: f.type === 'Pemasukan' ? total : 0,
+            keluar: f.type === 'Pengeluaran' ? total : 0,
+            kategori: f.kategori,
+            kas: f.kas,
+            tujuan: f.tujuan
+          });
+          onClose();
+        }} className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-500 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400"><Check className="h-4 w-4"/> Simpan</button>
       </div>
     </div>
   </div>);
@@ -278,10 +343,31 @@ function FloatingAI({onAdd}){
           <div className="grid grid-cols-2 gap-2">
             <FInput label="Tanggal" v={parsed.tgl} type="date" onChange={v=>setParsed({...parsed,tgl:v})}/><FInput label="Kas" v={parsed.kas} opts={KAS_LIST} onChange={v=>setParsed({...parsed,kas:v})}/>
             <div className="col-span-2"><FInput label="Deskripsi" v={parsed.desc} onChange={v=>setParsed({...parsed,desc:v})}/></div>
-            <FInput label="Kategori" v={parsed.kategori} opts={ALL_CATS} onChange={v=>setParsed({...parsed,kategori:v})}/><FInput label="Tujuan" v={parsed.tujuan} onChange={v=>setParsed({...parsed,tujuan:v})}/>
-            <FInput label="Masuk" v={parsed.masuk} type="number" onChange={v=>setParsed({...parsed,masuk:Number(v)||0})}/><FInput label="Keluar" v={parsed.keluar} type="number" onChange={v=>setParsed({...parsed,keluar:Number(v)||0})}/>
+            <FInput label="Tipe" v={parsed.type} opts={['Pengeluaran','Pemasukan']} onChange={v=>setParsed({...parsed,type:v})}/><FInput label="Kategori" v={parsed.kategori} opts={ALL_CATS} onChange={v=>setParsed({...parsed,kategori:v})}/>
+            <FInput label="Volume" v={parsed.volume} type="number" onChange={v=>setParsed({...parsed,volume:Number(v)||1})}/><FInput label="Satuan" v={parsed.satuan} onChange={v=>setParsed({...parsed,satuan:v})}/>
+            <FInput label="Harga Satuan" v={parsed.harga_satuan} type="number" onChange={v=>setParsed({...parsed,harga_satuan:Number(v)||0})}/>
+            <div className="block"><span className="mb-1 block text-[10px] uppercase tracking-wider text-slate-500">Total (Terkunci)</span><div className="w-full rounded-lg border border-white/10 bg-slate-800/50 px-2 py-1.5 text-xs text-slate-400 font-semibold">{fmt(parsed.volume * parsed.harga_satuan)}</div></div>
+            <div className="col-span-2"><FInput label="Tujuan" v={parsed.tujuan} onChange={v=>setParsed({...parsed,tujuan:v})}/></div>
           </div>
-          <div className="mt-3 flex gap-2"><button onClick={reset} className="flex-1 rounded-xl border border-white/10 py-2 text-sm font-medium text-slate-300 hover:bg-white/5">Batal</button><button onClick={()=>{onAdd(parsed);reset();}} className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-500 py-2 text-sm font-semibold text-slate-950"><Check className="h-4 w-4"/> Simpan</button></div>
+          <div className="mt-3 flex gap-2">
+            <button onClick={reset} className="flex-1 rounded-xl border border-white/10 py-2 text-sm font-medium text-slate-300 hover:bg-white/5">Batal</button>
+            <button onClick={()=>{
+              const total = Math.round(parsed.volume * parsed.harga_satuan);
+              onAdd({
+                tgl: parsed.tgl,
+                desc: parsed.desc,
+                volume: parsed.volume,
+                satuan: parsed.satuan,
+                harga_satuan: parsed.harga_satuan,
+                masuk: parsed.type === 'Pemasukan' ? total : 0,
+                keluar: parsed.type === 'Pengeluaran' ? total : 0,
+                kategori: parsed.kategori,
+                kas: parsed.kas,
+                tujuan: parsed.tujuan
+              });
+              reset();
+            }} className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-500 py-2 text-sm font-semibold text-slate-950"><Check className="h-4 w-4"/> Simpan</button>
+          </div>
         </div>}
       </div>
       <div className="border-t border-white/10 p-3">
@@ -422,9 +508,9 @@ function MainApp({currentUser,onLogout}){
       rows.push([
         t.tgl || '',
         t.desc || '',
-        1,
-        'ls',
-        numCell(t.masuk || t.keluar || 0),
+        t.volume || 1,
+        t.satuan || 'ls',
+        numCell(t.harga_satuan || t.masuk || t.keluar || 0),
         numCell(t.masuk || 0),
         numCell(t.keluar || 0),
         formulaCell(saldoFormula),
@@ -546,9 +632,13 @@ function MainApp({currentUser,onLogout}){
     
     const tableBody = chronologicalTxs.map(t => {
       runningSaldo = runningSaldo + t.masuk - t.keluar;
+      let descText = t.desc || '';
+      if ((t.volume && t.volume > 1) || (t.satuan && t.satuan !== 'ls') || (t.harga_satuan && t.harga_satuan > 0)) {
+        descText += `\n(${t.volume} ${t.satuan} @ ${fmt(t.harga_satuan)})`;
+      }
       return [
         t.tgl ? new Date(t.tgl).toLocaleDateString('id-ID') : '', // Tanggal
-        t.desc || '',           // Deskripsi
+        descText,               // Deskripsi
         t.kategori || '',       // Kategori
         t.kas || '',            // Kas
         t.masuk > 0 ? fmt(t.masuk) : '-',
@@ -657,7 +747,19 @@ function MainApp({currentUser,onLogout}){
                 <tbody>
                   {filtTxs.map((t,i)=>(<tr key={t.id||i} className="border-t border-white/5 hover:bg-white/[0.02]">
                     <td className="whitespace-nowrap px-4 py-3 text-slate-400">{t.tgl}</td>
-                    <td className="px-4 py-3 font-medium text-slate-200"><div className="flex items-center gap-1.5">{t.desc}{t.sync_source === 'sheet' && <span className="rounded bg-emerald-400/10 px-1 py-0.5 text-[9px] text-emerald-300 ring-1 ring-emerald-400/20">Sheet</span>}</div></td>
+                    <td className="px-4 py-3 font-medium text-slate-200">
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-1.5">
+                          {t.desc}
+                          {t.sync_source === 'sheet' && <span className="rounded bg-emerald-400/10 px-1 py-0.5 text-[9px] text-emerald-300 ring-1 ring-emerald-400/20">Sheet</span>}
+                        </div>
+                        {((t.volume && t.volume > 1) || (t.satuan && t.satuan !== 'ls') || (t.harga_satuan && t.harga_satuan > 0)) && (
+                          <div className="text-[10px] text-slate-500 font-normal mt-0.5">
+                            {t.volume} {t.satuan} @ {fmt(t.harga_satuan)}
+                          </div>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-4 py-3"><span className={`rounded-md px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${CAT_CLS[t.kategori]||CAT_CLS.Lainnya}`}>{t.kategori}</span></td>
                     <td className="px-4 py-3 text-slate-400">{t.kas}</td>
                     <td className="px-4 py-3 text-right">{t.masuk>0?<span className="inline-flex items-center gap-1 font-semibold tabular-nums text-emerald-400"><ArrowDownLeft className="h-3.5 w-3.5"/>{fmt(t.masuk)}</span>:<span className="inline-flex items-center gap-1 font-semibold tabular-nums text-rose-400"><ArrowUpRight className="h-3.5 w-3.5"/>{fmt(t.keluar)}</span>}</td>

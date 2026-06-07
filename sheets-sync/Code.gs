@@ -591,15 +591,17 @@ function buildUUIDRowMap(sheet) {
 function writeTransactionToRow(sheet, row, tx) {
   // Tulis data ke kolom yang sesuai
   const rowData = [
-    tx.tgl ? parseSupabaseDate(tx.tgl) : '',     // A: Tanggal
-    tx.deskripsi || '',                           // B: Deskripsi
-    '', '', '',                                   // C, D, E: kosong (formula/lainnya)
-    tx.masuk || 0,                                // F: Masuk
-    tx.keluar || 0,                               // G: Keluar
-    '',                                           // H: kosong
-    tx.tujuan || '',                              // I: Tujuan
-    tx.kategori || '',                            // J: Kategori
-    tx.kas || '',                                 // K: Kas
+    tx.tgl ? parseSupabaseDate(tx.tgl) : '',       // A: Tanggal
+    tx.deskripsi || '',                             // B: Deskripsi
+    tx.volume || 1,                                 // C: Volume
+    tx.satuan || 'ls',                              // D: Satuan
+    tx.harga_satuan || 0,                           // E: Nilai Satuan
+    tx.masuk || 0,                                  // F: Masuk
+    tx.keluar || 0,                                 // G: Keluar
+    '',                                             // H: kosong (Saldo akan terhitung otomatis di sheet)
+    tx.tujuan || '',                                // I: Tujuan
+    tx.kategori || '',                              // J: Kategori
+    tx.kas || '',                                   // K: Kas
   ];
 
   sheet.getRange(row, 1, 1, 11).setValues([rowData]);
@@ -611,6 +613,9 @@ function writeTransactionToRow(sheet, row, tx) {
   const txDataForHash = {
     tgl: tx.tgl,
     deskripsi: tx.deskripsi,
+    volume: tx.volume || 1,
+    satuan: tx.satuan || 'ls',
+    harga_satuan: tx.harga_satuan || 0,
     masuk: tx.masuk,
     keluar: tx.keluar,
     tujuan: tx.tujuan,
@@ -833,6 +838,9 @@ function computeHash(txData) {
   const parts = [
     txData.tgl || '',
     txData.deskripsi || '',
+    String(txData.volume || 1),
+    txData.satuan || 'ls',
+    String(txData.harga_satuan || 0),
     String(txData.masuk || 0),
     String(txData.keluar || 0),
     txData.tujuan || '',
@@ -959,13 +967,16 @@ function getOrCreateProject(name, kontrak, dpMasuk, sheetGid) {
 function buildTransactionData(rowValues, projectId) {
   return {
     project_id: projectId,
-    tgl: toISO(rowValues[0]),          // Kolom A: Tanggal
-    deskripsi: String(rowValues[1] || '').trim(),  // Kolom B: Deskripsi
-    masuk: toNumber(rowValues[5]),      // Kolom F: Masuk
-    keluar: toNumber(rowValues[6]),     // Kolom G: Keluar
-    tujuan: String(rowValues[8] || '').trim(),     // Kolom I: Tujuan
-    kategori: String(rowValues[9] || '').trim(),   // Kolom J: Kategori
-    kas: String(rowValues[10] || '').trim(),       // Kolom K: Kas
+    tgl: toISO(rowValues[0]),                       // Kolom A: Tanggal
+    deskripsi: String(rowValues[1] || '').trim(),   // Kolom B: Deskripsi
+    volume: toNumber(rowValues[2]) || 1,            // Kolom C: Volume
+    satuan: String(rowValues[3] || 'ls').trim(),    // Kolom D: Satuan
+    harga_satuan: toNumber(rowValues[4]),           // Kolom E: Nilai Satuan
+    masuk: toNumber(rowValues[5]),                  // Kolom F: Masuk
+    keluar: toNumber(rowValues[6]),                 // Kolom G: Keluar
+    tujuan: String(rowValues[8] || '').trim(),       // Kolom I: Tujuan
+    kategori: String(rowValues[9] || '').trim(),     // Kolom J: Kategori
+    kas: String(rowValues[10] || '').trim(),         // Kolom K: Kas
   };
 }
 
