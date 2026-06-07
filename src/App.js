@@ -20,9 +20,6 @@ const fmt  = n => 'Rp ' + new Intl.NumberFormat('id-ID').format(Math.round(n));
 const fmtS = n => fmt(n);
 const TODAY = () => new Date().toISOString().slice(0,10);
 
-// Google Apps Script Web App URL untuk instant sync ke Google Sheets
-const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwEe61JU8sfTQp6SNy2xNTI1qp-IyjXNMFJFeTJ4-duPWbipqJlJhv_LPDNMA5GoKi9Vw/exec';
-
 /* ─── METRICS ─── */
 function computeMetrics(totalKontrak, txs=[], dpMasukDb=0) {
   const sorted=[...txs].sort((a,b)=>a.tgl.localeCompare(b.tgl));
@@ -951,22 +948,20 @@ function MainApp({currentUser,onLogout}){
 
   // ── Google Sheets Sync Triggers ──
   const triggerGasSync = async () => {
-    const url = projData?.gas_url || localStorage.getItem('gas_web_app_url') || GAS_WEB_APP_URL;
-    if (!url) {
-      console.warn('Google Sheets Web App URL belum dikonfigurasi.');
-      return;
-    }
+    // Web App proxy URL (sudah jalan realtime 15 detik)
+    const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzwSZ9wli86Lj_Fh7MGJRHdMJKu-Sh4kxYGUblft8AytaQXL0V2-zVnjY-GiUD770AlEw/exec';
+    
     try {
-      const response = await fetch(url, {
+      const response = await fetch(WEB_APP_URL, {
         method: 'POST',
         body: JSON.stringify({
-          action: 'syncNow',
+          action: 'sync',
           projectName: proj || 'karantina-59'
         })
       });
       const data = await response.json();
       if (data.status === 'success') {
-        console.log('✅ Instant sync ke Google Sheets berhasil!');
+        console.log('✅ Instant sync ke Google Sheets berhasil!', data);
       } else {
         console.error('Google Sheets Sync Error:', data.message);
       }
@@ -976,18 +971,14 @@ function MainApp({currentUser,onLogout}){
   };
 
   const handleSync = async () => {
-    const url = projData?.gas_url || localStorage.getItem('gas_web_app_url') || GAS_WEB_APP_URL;
-    if (!url) {
-      alert('Google Sheets Web App URL belum dikonfigurasi! Silakan hubungi Admin untuk mengatur URL sinkronisasi Google Sheets untuk proyek ini.');
-      await loadTxs(proj);
-      return;
-    }
+    const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzwSZ9wli86Lj_Fh7MGJRHdMJKu-Sh4kxYGUblft8AytaQXL0V2-zVnjY-GiUD770AlEw/exec';
+    
     setSyncingGas(true);
     try {
-      const response = await fetch(url, {
+      const response = await fetch(WEB_APP_URL, {
         method: 'POST',
         body: JSON.stringify({
-          action: 'syncNow',
+          action: 'sync',
           projectName: proj || 'karantina-59'
         })
       });
@@ -995,11 +986,11 @@ function MainApp({currentUser,onLogout}){
       if (data.status !== 'success') {
         alert('Gagal sinkronisasi Google Sheets: ' + (data.message || 'Terjadi kesalahan'));
       } else {
-        alert('✅ Sinkronisasi berhasil! Data sudah di-update di Google Sheets.');
+        alert('✅ Sinkronisasi berhasil! ' + data.message);
       }
     } catch (e) {
       console.error('Gagal sinkronisasi:', e);
-      alert('Gagal menghubungi Google Sheets Web App. Pastikan URL sudah benar dan hak akses Web App deployment diatur sebagai "Anyone".');
+      alert('Gagal menghubungi Web App. Periksa browser console untuk detail error.');
     } finally {
       await loadTxs(proj);
       setSyncingGas(false);
