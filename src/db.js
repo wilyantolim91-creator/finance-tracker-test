@@ -1,13 +1,19 @@
 import { supabase } from './supabaseConfig';
 
 function mapTx(t) {
+  const vol = t.volume !== undefined && t.volume !== null ? Number(t.volume) : 1;
+  const total = Number(t.masuk) || Number(t.keluar) || 0;
+  const hs = t.harga_satuan !== undefined && t.harga_satuan !== null && Number(t.harga_satuan) > 0
+    ? Number(t.harga_satuan)
+    : (vol > 0 ? Math.round(total / vol) : total);
+
   return {
     id: t.id,
     tgl: t.tgl,
     desc: t.deskripsi,
-    volume: t.volume !== undefined && t.volume !== null ? Number(t.volume) : 1,
+    volume: vol,
     satuan: t.satuan || 'ls',
-    harga_satuan: t.harga_satuan !== undefined && t.harga_satuan !== null ? Number(t.harga_satuan) : 0,
+    harga_satuan: hs,
     masuk: t.masuk,
     keluar: t.keluar,
     kategori: t.kategori,
