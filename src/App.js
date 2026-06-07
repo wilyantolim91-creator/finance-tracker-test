@@ -948,7 +948,7 @@ function MainApp({currentUser,onLogout}){
 
   // ── Google Sheets Sync Triggers ──
   const triggerGasSync = async () => {
-    const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxlevTOkjKO6HDQxcCGObGxSGuT4IgZWXFr-WdhnOkoKGzOklfDrrbgi_020u_SaTHl6g/exec';
+    const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwqFlkeifkzMdWTLd8x8xUxptelTtYBsvXCpI7fd2cBJtRsJ6wZqU9XJDefJNo44Zdxvg/exec';
     const pName = (proj || 'KARANTINA 59').toLowerCase().replace(/\s+/g, '-');
     
     try {
@@ -968,7 +968,7 @@ function MainApp({currentUser,onLogout}){
   };
 
   const handleSync = async () => {
-    const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxlevTOkjKO6HDQxcCGObGxSGuT4IgZWXFr-WdhnOkoKGzOklfDrrbgi_020u_SaTHl6g/exec';
+    const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwqFlkeifkzMdWTLd8x8xUxptelTtYBsvXCpI7fd2cBJtRsJ6wZqU9XJDefJNo44Zdxvg/exec';
     const pName = (proj || 'KARANTINA 59').toLowerCase().replace(/\s+/g, '-');
     
     setSyncingGas(true);
