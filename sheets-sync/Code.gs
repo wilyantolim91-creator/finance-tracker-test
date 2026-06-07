@@ -648,8 +648,8 @@ function writeTransactionToRow(sheet, row, tx) {
     tx.volume || 1,                                 // C: Volume
     tx.satuan || 'ls',                              // D: Satuan
     tx.harga_satuan || 0,                           // E: Nilai Satuan
-    tx.masuk || 0,                                  // F: Masuk
-    tx.keluar || 0,                                 // G: Keluar
+    tx.masuk > 0 ? "=C" + row + "*E" + row : 0,     // F: Masuk
+    tx.keluar > 0 ? "=C" + row + "*E" + row : 0,    // G: Keluar
     '',                                             // H: kosong (Saldo akan terhitung otomatis di sheet)
     tx.tujuan || '',                                // I: Tujuan
     tx.kategori || '',                              // J: Kategori
