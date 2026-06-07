@@ -1249,8 +1249,8 @@ function MainApp({currentUser,onLogout}){
       <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] rounded-full bg-cyan-500/10 blur-[120px] pointer-events-none animate-pulse-slow" />
       <div className="absolute top-[30%] left-[20%] w-[350px] h-[350px] rounded-full bg-violet-600/5 blur-[100px] pointer-events-none animate-float-slow" />
 
-      {isAdmin&&<FloatingAI onAdd={handleAdd} allProjects={visProj} currentProject={proj}/>}
-      {showAdd&&isAdmin&&<FormModal title="Tambah Transaksi" onSave={handleSave} onClose={()=>setShowAdd(false)}/>}
+      {visProj.length > 0 && <FloatingAI onAdd={handleAdd} allProjects={visProj} currentProject={proj}/>}
+      {showAdd && <FormModal title="Tambah Transaksi" onSave={handleSave} onClose={()=>setShowAdd(false)}/>}
       {editTx&&isAdmin&&<FormModal title="Edit Transaksi" transaction={editTx} onSave={handleSave} onClose={()=>setEditTx(null)}/>}
 
       <div className="relative z-10 flex">
@@ -1320,9 +1320,8 @@ function MainApp({currentUser,onLogout}){
                 <RefreshCw className={`h-4 w-4 ${syncingGas ? 'animate-spin text-cyan-400' : ''}`}/>
               </button>
             </div>
-            
             <div className="flex items-center gap-2.5">
-              {isAdmin&&<>
+              {visProj.length > 0 && <>
                 <button onClick={()=>setShowAdd(true)} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-sky-400 to-cyan-500 px-4 py-2 text-xs font-bold text-slate-950 shadow-lg shadow-cyan-400/10 hover:opacity-90 transition-all"><Plus className="h-4 w-4"/> Manual</button>
                 <button onClick={dlXLS} className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-3.5 py-2 text-xs font-semibold text-slate-300 hover:bg-white/5 transition-all"><FileText className="h-4 w-4"/> XLS</button>
                 <button onClick={dlPDF} className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-3.5 py-2 text-xs font-semibold text-slate-300 hover:bg-white/5 transition-all"><File className="h-4 w-4"/> PDF</button>
