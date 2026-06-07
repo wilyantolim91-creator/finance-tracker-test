@@ -36,7 +36,25 @@ function computeMetrics(totalKontrak, txs=[], dpMasukDb=0) {
 }
 
 /* ─── AI PARSER ─── */
-const SYS=()=>`Kamu parser transaksi keuangan. Hasilkan SATU JSON dari input. Field: tgl(YYYY-MM-DD default ${TODAY()}),desc,masuk(0 jika pengeluaran),keluar(0 jika pemasukan),kategori(${ALL_CATS.join('/')}),kas(${KAS_LIST.join('/')} default KAS UTAMA),tujuan. Konversi jt=1e6 rb=1e3. HANYA JSON.`;
+const SYS=()=>`Kamu adalah parser transaksi keuangan cerdas. Analisis input pengguna (teks/gambar) untuk mengekstrak data transaksi dalam format JSON.
+Aturan:
+1. Jenis Transaksi:
+   - Jika kalimat mengandung kata bermakna pengeluaran (misal: 'beli', 'bayar', 'upah', 'belanja', 'ongkir', 'gaji', 'keluar', 'ambil'), maka ini adalah pengeluaran. Set masuk=0 dan keluar=[nominal/0 jika tidak disebutkan].
+   - Jika kalimat mengandung kata bermakna pemasukan (misal: 'terima', 'dp', 'masuk', 'pembayaran dari klien', 'transfer masuk'), maka ini adalah pemasukan. Set keluar=0 dan masuk=[nominal/0 jika tidak disebutkan].
+   - Jika transfer kas/dana (misal: 'transfer ke kas awen', 'pindah saldo ke kas wily'), set kategori='Transfer' atau 'Transfer Internal'.
+2. Nominal Uang:
+   - Ekstrak harga/nominal uang. Konversikan singkatan: jt=1000000 (misal 1.5jt = 1500000) dan rb=1000 (misal 500rb = 500000).
+   - JANGAN menginterpretasikan kuantitas barang sebagai harga nominal (misal: 'beli semen 10 sak' -> angka 10 adalah kuantitas barang, bukan harga semen. Jika harga tidak disebutkan, set keluar=0 dan masuk=0 agar pengguna bisa mengisi manual).
+3. Field Output JSON:
+   - tgl: format YYYY-MM-DD (default hari ini: ${TODAY()}).
+   - desc: buat ringkasan deskripsi yang informatif (misal: 'Beli semen 10 sak').
+   - masuk: nominal pemasukan (number), default 0.
+   - keluar: nominal pengeluaran (number), default 0.
+   - kategori: pilih salah satu dari [${ALL_CATS.join(', ')}] secara cerdas. Semen/pasir/cat -> Material. Gaji/upah -> Upah atau Labor.
+   - kas: pilih salah satu dari [${KAS_LIST.join(', ')}]. Jika tidak disebutkan, default ke 'KAS UTAMA'.
+   - tujuan: tujuan pembayaran atau supplier (misal: 'Supplier', 'Tukang', atau kas tujuan jika transfer).
+
+Hanya hasilkan string JSON valid tanpa penjelasan tambahan.`;
 async function parseAI(content){
   const apiKey = localStorage.getItem('gemini_api_key') || process.env.REACT_APP_GEMINI_KEY || '';
   if (!apiKey) {
