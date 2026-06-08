@@ -23,12 +23,17 @@ export default async function handler(request, response) {
 
     // Fungsi kecil untuk membalas ke Telegram
     const replyToTelegram = async (text) => {
-      if (!TELEGRAM_TOKEN) return;
-      await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+      if (!TELEGRAM_TOKEN) return { error: "No Token" };
+      
+      const cleanToken = TELEGRAM_TOKEN.replace(/^bot/i, ''); // Hapus tulisan bot jika user terlanjur copas
+      
+      const res = await fetch(`https://api.telegram.org/bot${cleanToken}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chat_id: chatId, text })
       });
+      const data = await res.json();
+      return data;
     };
 
     if (!GEMINI_API_KEY || !SUPABASE_URL || !SUPABASE_KEY || !TELEGRAM_TOKEN) {
@@ -96,8 +101,8 @@ Pesan user: "${userText}"`;
 
     // Jika bukan transaksi, cukup balas chat-nya saja
     if (!jsonResult.is_transaction || !jsonResult.transaction_data) {
-      await replyToTelegram(jsonResult.reply_text || "Halo! Ada yang bisa saya bantu catat?");
-      return response.status(200).json({ status: 'chat_only' });
+      const tgRes = await replyToTelegram(jsonResult.reply_text || "Halo! Ada yang bisa saya bantu catat?");
+      return response.status(200).json({ status: 'chat_only', tgRes });
     }
 
     const tx = jsonResult.transaction_data;
