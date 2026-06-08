@@ -7,14 +7,16 @@ export default async function handler(request, response) {
   try {
     const data = request.body;
     
-    // Pastikan ini adalah pesan teks dari Telegram
-    if (!data || !data.message || !data.message.text) {
-      return response.status(200).json({ status: 'ok', msg: 'Not a text message' });
+    // Pastikan ini adalah pesan valid dari Telegram (bisa berupa text atau foto)
+    if (!data || !data.message || (!data.message.text && !data.message.photo)) {
+      return response.status(200).json({ status: 'ok', msg: 'Not a text or photo message' });
     }
 
-    const chatId = data.message.chat.id;
-    const userText = data.message.text;
-    const replyToMsg = data.message.reply_to_message && data.message.reply_to_message.text ? data.message.reply_to_message.text : "";
+    const message = data.message;
+    const chatId = message.chat.id;
+    const chatType = message.chat.type || 'private';
+    const userText = message.text || message.caption || "";
+    const replyToMsg = message.reply_to_message && message.reply_to_message.text ? message.reply_to_message.text : "";
 
     // Ambil Environment Variables (dengan fallback)
     const TELEGRAM_TOKEN = (process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT || '').trim();
@@ -22,19 +24,19 @@ export default async function handler(request, response) {
     const SUPABASE_URL = (process.env.REACT_APP_SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://derikfjxjsvhaxfqcqwb.supabase.co').trim();
     const SUPABASE_KEY = (process.env.REACT_APP_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'sb_publishable_wBxny-c-7GFsoIjS9Xaasw_IguFmgWC').trim();
 
+    const cleanToken = TELEGRAM_TOKEN.replace(/^bot/i, '').replace(/["']/g, ''); // Hapus tulisan bot atau tanda kutip jika user terlanjur copas
+
     // Fungsi kecil untuk membalas ke Telegram
     const replyToTelegram = async (text) => {
       if (!TELEGRAM_TOKEN) return { error: "No Token" };
-      
-      const cleanToken = TELEGRAM_TOKEN.replace(/^bot/i, '').replace(/["']/g, ''); // Hapus tulisan bot atau tanda kutip jika user terlanjur copas
       
       const res = await fetch(`https://api.telegram.org/bot${cleanToken}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chat_id: chatId, text })
       });
-      const data = await res.json();
-      return data;
+      const resData = await res.json();
+      return resData;
     };
 
     if (!GEMINI_API_KEY || !SUPABASE_URL || !SUPABASE_KEY || !TELEGRAM_TOKEN) {
@@ -43,11 +45,49 @@ export default async function handler(request, response) {
       return response.status(200).json({ error: 'Missing config' });
     }
 
+    // Filter pesan grup: Hanya proses jika private chat, atau reply ke bot, atau mengandung mention/command
+    const isPrivate = chatType === 'private';
+    const isReplyToBot = message.reply_to_message && message.reply_to_message.from && message.reply_to_message.from.is_bot;
+    const isMentioned = userText && (userText.includes('@') || userText.startsWith('/'));
+
+    if (!isPrivate && !isReplyToBot && !isMentioned) {
+      return response.status(200).json({ status: 'ok', msg: 'Ignored group message (no mention or reply)' });
+    }
+
+    // Bersihkan mention/username bot agar tidak mengacaukan AI
+    const cleanUserText = userText.replace(/@[a-zA-Z0-9_]+/g, '').trim();
+
+    // Unduh foto jika ada
+    let base64Image = null;
+    let mimeType = null;
+    if (message.photo && message.photo.length > 0) {
+      try {
+        const photo = message.photo[message.photo.length - 1]; // Resolusi terbesar
+        const fileId = photo.file_id;
+        
+        const fileRes = await fetch(`https://api.telegram.org/bot${cleanToken}/getFile?file_id=${fileId}`);
+        if (fileRes.ok) {
+          const fileData = await fileRes.json();
+          if (fileData.ok && fileData.result && fileData.result.file_path) {
+            const filePath = fileData.result.file_path;
+            const imgRes = await fetch(`https://api.telegram.org/file/bot${cleanToken}/${filePath}`);
+            if (imgRes.ok) {
+              const imgBuffer = await imgRes.arrayBuffer();
+              base64Image = Buffer.from(imgBuffer).toString('base64');
+              mimeType = 'image/jpeg';
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Gagal mendownload foto:", err);
+      }
+    }
+
     // 1. Panggil Gemini AI untuk mem-parsing pesan
     const prompt = `Kamu adalah asisten pengatur keuangan proyek bernama FinTrack.
 
 ATURAN KERJA:
-1. FASE INPUT (Belum dikonfirmasi): Jika pesan user saat ini berisi permintaan mencatat transaksi baru, KAMU TIDAK BOLEH MENYIMPANNYA (set is_transaction = false).
+1. FASE INPUT (Belum dikonfirmasi): Jika pesan user saat ini berisi permintaan mencatat transaksi baru atau struk belanja, KAMU TIDAK BOLEH MENYIMPANNYA (set is_transaction = false).
 Sebagai gantinya, buatlah Kartu Konfirmasi di bagian \`reply_text\` dengan format ini:
 🧾 KONFIRMASI TRANSAKSI
 -----------------------
@@ -65,9 +105,10 @@ Sebagai gantinya, buatlah Kartu Konfirmasi di bagian \`reply_text\` dengan forma
 Set is_transaction = true. EKSTRAK semua angka dan data dari 'Pesan Bot Sebelumnya' dan masukkan ke dalam \`transaction_data\`. Di bagian \`reply_text\`, beri tahu: "✅ Data transaksi di atas berhasil disimpan ke database!"
 
 3. Jika user berniat mencatat tapi kas/proyek belum disebutkan, set is_transaction = false dan tanyakan detailnya (jangan buat Kartu Konfirmasi jika data belum lengkap).
+4. Jika ada gambar/foto struk transaksi yang dikirimkan, bacalah teks/OCR di dalam gambar tersebut untuk mengekstrak informasi nominal, deskripsi barang, kas/bank yang digunakan (jika ada), proyek (jika ada), dan tanggal transaksi secara otomatis. Gunakan informasi ini untuk membuat Kartu Konfirmasi Transaksi.
 
 Kamu WAJIB membalas dengan HANYA satu objek JSON murni (tanpa markdown backticks).
-Gunakan tanggal hari ini (${new Date().toISOString().split('T')[0]}) jika tanggal transaksi tidak disebut.
+Gunakan tanggal hari ini (${new Date().toISOString().split('T')[0]}) jika tanggal transaksi tidak disebut/tidak terbaca.
 
 Format JSON yang diwajibkan:
 {
@@ -88,13 +129,26 @@ Format JSON yang diwajibkan:
 }
 
 Pesan Bot Sebelumnya (yang di-reply user): "${replyToMsg}"
-Pesan user saat ini: "${userText}"`;
+Pesan user saat ini: "${cleanUserText}"`;
+
+    const contents = [{
+      parts: [{ text: prompt }]
+    }];
+
+    if (base64Image && mimeType) {
+      contents[0].parts.push({
+        inlineData: {
+          mimeType: mimeType,
+          data: base64Image
+        }
+      });
+    }
 
     const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${GEMINI_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
+        contents,
         generationConfig: { response_mime_type: "application/json" }
       })
     });
