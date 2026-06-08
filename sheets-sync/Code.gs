@@ -665,7 +665,7 @@ function writeTransactionToRow(sheet, row, tx) {
     tx.harga_satuan || 0,                           // E: Nilai Satuan
     tx.masuk > 0 ? "=C" + row + "*E" + row : 0,     // F: Masuk
     tx.keluar > 0 ? "=C" + row + "*E" + row : 0,    // G: Keluar
-    '',                                             // H: kosong (Saldo akan terhitung otomatis di sheet)
+    `=SUM(F$14:F${row})-SUM(G$14:G${row})`,         // H: Saldo Kumulatif
     tx.tujuan || '',                                // I: Tujuan
     tx.kategori || '',                              // J: Kategori
     tx.kas || '',                                   // K: Kas

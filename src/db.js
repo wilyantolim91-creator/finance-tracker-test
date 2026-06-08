@@ -111,7 +111,8 @@ export const db = {
     const { error } = await supabase.from('transactions').update({
       tgl: tx.tgl, deskripsi: tx.desc,
       volume: tx.volume || 1, satuan: tx.satuan || 'ls', harga_satuan: tx.harga_satuan || 0,
-      masuk: tx.masuk || 0, keluar: tx.keluar || 0, kategori: tx.kategori, kas: tx.kas, tujuan: tx.tujuan || '', sync_source: 'app'
+      masuk: tx.masuk || 0, keluar: tx.keluar || 0, kategori: tx.kategori, kas: tx.kas, tujuan: tx.tujuan || '', sync_source: 'app',
+      updated_at: new Date().toISOString()
     }).eq('id', id);
     if (error) throw error;
   },
