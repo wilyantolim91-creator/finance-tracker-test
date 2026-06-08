@@ -16,7 +16,7 @@ export default async function handler(request, response) {
     const userText = data.message.text;
 
     // Ambil Environment Variables (dengan fallback)
-    const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT;
+    const TELEGRAM_TOKEN = (process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT || '').trim();
     const GEMINI_API_KEY = (process.env.GEMINI_API_KEY || '').trim();
     const SUPABASE_URL = (process.env.REACT_APP_SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://derikfjxjsvhaxfqcqwb.supabase.co').trim();
     const SUPABASE_KEY = (process.env.REACT_APP_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'sb_publishable_wBxny-c-7GFsoIjS9Xaasw_IguFmgWC').trim();
@@ -25,7 +25,7 @@ export default async function handler(request, response) {
     const replyToTelegram = async (text) => {
       if (!TELEGRAM_TOKEN) return { error: "No Token" };
       
-      const cleanToken = TELEGRAM_TOKEN.replace(/^bot/i, ''); // Hapus tulisan bot jika user terlanjur copas
+      const cleanToken = TELEGRAM_TOKEN.replace(/^bot/i, '').replace(/["']/g, ''); // Hapus tulisan bot atau tanda kutip jika user terlanjur copas
       
       const res = await fetch(`https://api.telegram.org/bot${cleanToken}/sendMessage`, {
         method: 'POST',
