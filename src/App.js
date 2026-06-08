@@ -948,7 +948,11 @@ function MainApp({currentUser,onLogout}){
 
   // ── Google Sheets Sync Triggers ──
   const triggerGasSync = async () => {
-    const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxPP7803BjnzrfiHczNmrtSm-k0yjOPrDyuOMEX_U_JiDU6dcVWymCFCXGmwXTViqQRJg/exec';
+    const WEB_APP_URL = localStorage.getItem('gas_web_app_url') || '';
+    if (!WEB_APP_URL) {
+      console.warn('Sync dibatalkan: Web App URL belum diatur di Admin.');
+      return;
+    }
     const pName = (proj || 'KARANTINA 59').toLowerCase().replace(/\s+/g, '-');
     
     try {
@@ -968,7 +972,11 @@ function MainApp({currentUser,onLogout}){
   };
 
   const handleSync = async () => {
-    const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxPP7803BjnzrfiHczNmrtSm-k0yjOPrDyuOMEX_U_JiDU6dcVWymCFCXGmwXTViqQRJg/exec';
+    const WEB_APP_URL = localStorage.getItem('gas_web_app_url') || '';
+    if (!WEB_APP_URL) {
+      alert('Sync dibatalkan: Web App URL belum diatur di halaman Admin.');
+      return;
+    }
     const pName = (proj || 'KARANTINA 59').toLowerCase().replace(/\s+/g, '-');
     
     setSyncingGas(true);
