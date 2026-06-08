@@ -17,9 +17,9 @@ export default async function handler(request, response) {
 
     // Ambil Environment Variables (dengan fallback)
     const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT;
-    const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-    const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://derikfjxjsvhaxfqcqwb.supabase.co';
-    const SUPABASE_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'sb_publishable_wBxny-c-7GFsoIjS9Xaasw_IguFmgWC';
+    const GEMINI_API_KEY = (process.env.GEMINI_API_KEY || '').trim();
+    const SUPABASE_URL = (process.env.REACT_APP_SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://derikfjxjsvhaxfqcqwb.supabase.co').trim();
+    const SUPABASE_KEY = (process.env.REACT_APP_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'sb_publishable_wBxny-c-7GFsoIjS9Xaasw_IguFmgWC').trim();
 
     // Fungsi kecil untuk membalas ke Telegram
     const replyToTelegram = async (text) => {
@@ -66,7 +66,7 @@ Format JSON yang diwajibkan:
 
 Pesan user: "${userText}"`;
 
-    const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+    const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
