@@ -15,11 +15,11 @@ export default async function handler(request, response) {
     const chatId = data.message.chat.id;
     const userText = data.message.text;
 
-    // Ambil Environment Variables
-    const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+    // Ambil Environment Variables (dengan fallback)
+    const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT;
     const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-    const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-    const SUPABASE_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+    const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://derikfjxjsvhaxfqcqwb.supabase.co';
+    const SUPABASE_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'sb_publishable_wBxny-c-7GFsoIjS9Xaasw_IguFmgWC';
 
     // Fungsi kecil untuk membalas ke Telegram
     const replyToTelegram = async (text) => {
