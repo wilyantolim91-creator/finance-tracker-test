@@ -14,6 +14,7 @@ export default async function handler(request, response) {
 
     const chatId = data.message.chat.id;
     const userText = data.message.text;
+    const replyToMsg = data.message.reply_to_message && data.message.reply_to_message.text ? data.message.reply_to_message.text : "";
 
     // Ambil Environment Variables (dengan fallback)
     const TELEGRAM_TOKEN = (process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT || '').trim();
@@ -44,13 +45,10 @@ export default async function handler(request, response) {
 
     // 1. Panggil Gemini AI untuk mem-parsing pesan
     const prompt = `Kamu adalah asisten pengatur keuangan proyek bernama FinTrack.
-Tugasmu ada 2:
-1. Menjawab sapaan atau percakapan biasa dengan ramah dan natural.
-4. Mengekstrak data transaksi jika user berniat mencatat keuangan, TAPI HANYA JIKA nama kas dan nama proyek sudah disebutkan secara eksplisit.
-5. Jika user berniat mencatat transaksi tapi tidak menyebutkan kas atau proyek, set is_transaction = false, lalu tanyakan proyek/kas apa yang digunakan dan minta user mengetik ulang pesan transaksinya secara lengkap.
-6. Jika is_transaction = true, bagian \`reply_text\` WAJIB diisi dengan format struk konfirmasi rapi seperti ini (gunakan emoji yang sesuai):
-"✅ BERHASIL DISIMPAN!
 
+ATURAN KERJA:
+1. FASE INPUT (Belum dikonfirmasi): Jika pesan user saat ini berisi permintaan mencatat transaksi baru, KAMU TIDAK BOLEH MENYIMPANNYA (set is_transaction = false).
+Sebagai gantinya, buatlah Kartu Konfirmasi di bagian \`reply_text\` dengan format ini:
 🧾 KONFIRMASI TRANSAKSI
 -----------------------
 📅 Tanggal: [isi]
@@ -61,30 +59,36 @@ Tugasmu ada 2:
 📂 Proyek: [isi]
 💼 Kas: [isi]
 
-💡 (Jika ada kesalahan, balas: 'Tolong revisi transaksi terakhir menjadi...')";
+⚠️ *Data ini BELUM tersimpan.* Balas (Reply) pesan ini dengan kata "YA" untuk menyimpan.
+
+2. FASE KONFIRMASI (User setuju): Jika Pesan user saat ini adalah persetujuan (contoh: "Ya", "Simpan") DAN 'Pesan Bot Sebelumnya' berisi Kartu Konfirmasi Transaksi buatanmu, MAKA ini waktunya menyimpan! 
+Set is_transaction = true. EKSTRAK semua angka dan data dari 'Pesan Bot Sebelumnya' dan masukkan ke dalam \`transaction_data\`. Di bagian \`reply_text\`, beri tahu: "✅ Data transaksi di atas berhasil disimpan ke database!"
+
+3. Jika user berniat mencatat tapi kas/proyek belum disebutkan, set is_transaction = false dan tanyakan detailnya (jangan buat Kartu Konfirmasi jika data belum lengkap).
 
 Kamu WAJIB membalas dengan HANYA satu objek JSON murni (tanpa markdown backticks).
-Gunakan tanggal hari ini (${new Date().toISOString().split('T')[0]}) jika user tidak menyebutkan tanggal untuk transaksi.
+Gunakan tanggal hari ini (${new Date().toISOString().split('T')[0]}) jika tanggal transaksi tidak disebut.
 
 Format JSON yang diwajibkan:
 {
-  "is_transaction": boolean, // true jika data transaksi (termasuk kas & proyek) LENGKAP, false jika ngobrol biasa atau butuh info tambahan
-  "reply_text": "Balasan bahasamu yang natural dan ramah ke user",
-  "transaction_data": { // WAJIB ada jika is_transaction = true, jika false isi dengan null
+  "is_transaction": boolean, // true HANYA JIKA sedang di Fase Konfirmasi (User membalas YA ke Kartu Transaksi).
+  "reply_text": "Isi balasanmu (Kartu Konfirmasi ATAU Pesan Sukses ATAU obrolan biasa)",
+  "transaction_data": { // Jika is_transaction = true, isi data ini secara akurat. Jika false, set null.
     "tgl": "YYYY-MM-DD",
     "deskripsi": "deskripsi singkat transaksi",
     "volume": 1,
     "satuan": "ls",
     "harga_satuan": 0,
-    "masuk": 0, // isi total uang masuk
-    "keluar": 0, // isi total uang keluar
-    "kategori": "Material", // Pilih salah satu: 'Material' | 'Upah' | 'Operasional' | 'Pemasukan' | 'Transfer' | 'Transfer Internal' | 'Lainnya'
-    "kas": "Nama Kas", // Contoh: 'KAS UTAMA', 'KAS WILY', dll.
-    "project_name": "Nama Proyek" // Contoh: 'KARANTINA 59', dll.
+    "masuk": 0,
+    "keluar": 0,
+    "kategori": "Material", // Pilihan: 'Material' | 'Upah' | 'Operasional' | 'Pemasukan' | 'Transfer' | 'Transfer Internal' | 'Lainnya'
+    "kas": "Nama Kas",
+    "project_name": "Nama Proyek"
   }
 }
 
-Pesan user: "${userText}"`;
+Pesan Bot Sebelumnya (yang di-reply user): "${replyToMsg}"
+Pesan user saat ini: "${userText}"`;
 
     const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${GEMINI_API_KEY}`, {
       method: 'POST',
