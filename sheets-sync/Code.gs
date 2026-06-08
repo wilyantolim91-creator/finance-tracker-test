@@ -582,6 +582,7 @@ function syncSupabaseToSheet(sheet, sheetName, projectId) {
 
   setSyncFlag(true);
   try {
+    const pulledIds = [];
     for (const tx of transactions) {
       const existingRow = uuidRowMap[tx.id];
 
@@ -594,6 +595,20 @@ function syncSupabaseToSheet(sheet, sheetName, projectId) {
         const newRow = findNextEmptyRow(sheet);
         writeTransactionToRow(sheet, newRow, tx);
         changeCount++;
+      }
+      pulledIds.push(tx.id);
+    }
+    
+    // Tandai di Supabase bahwa transaksi ini sudah masuk sheet
+    if (pulledIds.length > 0) {
+      try {
+        const idList = pulledIds.join(',');
+        supaFetch(`/rest/v1/transactions?id=in.(${idList})`, 'PATCH', {
+          sync_source: 'sheet',
+          updated_at: new Date().toISOString()
+        });
+      } catch(err) {
+        Logger.log('Gagal update sync_source: ' + err.message);
       }
     }
   } finally {
@@ -1216,6 +1231,7 @@ function syncAllFromSupabase(sheet, sheetName, projectId) {
 
   setSyncFlag(true);
   try {
+    const pulledIds = [];
     for (const tx of transactions) {
       const existingRow = uuidRowMap[tx.id];
 
@@ -1241,6 +1257,20 @@ function syncAllFromSupabase(sheet, sheetName, projectId) {
         const newRow = findNextEmptyRow(sheet);
         writeTransactionToRow(sheet, newRow, tx);
         changeCount++;
+      }
+      pulledIds.push(tx.id);
+    }
+
+    // Tandai di Supabase bahwa transaksi ini sudah masuk sheet
+    if (pulledIds.length > 0) {
+      try {
+        const idList = pulledIds.join(',');
+        supaFetch(`/rest/v1/transactions?id=in.(${idList})`, 'PATCH', {
+          sync_source: 'sheet',
+          updated_at: new Date().toISOString()
+        });
+      } catch(err) {
+        Logger.log('Gagal update sync_source: ' + err.message);
       }
     }
   } finally {
