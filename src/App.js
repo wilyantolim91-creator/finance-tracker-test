@@ -973,15 +973,27 @@ function MainApp({currentUser,onLogout}){
     
     setSyncingGas(true);
     try {
-      const response = await fetch(WEB_APP_URL, {
+      // Step 1: Import row baru dari Sheet ke Supabase
+      const importRes = await fetch(WEB_APP_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'importNew', projectName: pName })
+      });
+      const importData = await importRes.json();
+      
+      // Step 2: Sync balik Supabase ke Sheet (refresh + tambah formula)
+      const syncRes = await fetch(WEB_APP_URL, {
         method: 'POST',
         body: JSON.stringify({ action: 'sync', projectName: pName })
       });
-      const data = await response.json();
-      if (data.status !== 'success') {
-        alert('Gagal sync: ' + (data.message || 'Error'));
+      const syncData = await syncRes.json();
+      
+      if (syncData.status !== 'success') {
+        alert('Gagal sync: ' + (syncData.message || 'Error'));
       } else {
-        alert('✅ Sync berhasil! ' + data.message);
+        const importMsg = importData.count > 0 
+          ? `${importData.count} baris baru dari Sheet di-import. ` 
+          : '';
+        alert('✅ ' + importMsg + syncData.message);
       }
     } catch (e) {
       console.error('Gagal sync:', e);
