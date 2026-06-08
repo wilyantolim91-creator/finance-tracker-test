@@ -10,7 +10,7 @@ import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { db } from './db';
-import { supabase } from './supabaseConfig';
+import { supabase, SUPABASE_ANON_KEY } from './supabaseConfig';
 
 /* ─── CONSTANTS ─── */
 const KAS_LIST  = ['KAS UTAMA','KAS AWEN','KAS WILY'];
@@ -954,7 +954,7 @@ function MainApp({currentUser,onLogout}){
     try {
       const response = await fetch(WEB_APP_URL, {
         method: 'POST',
-        body: JSON.stringify({ action: 'sync', projectName: pName })
+        body: JSON.stringify({ action: 'sync', projectName: pName, token: SUPABASE_ANON_KEY })
       });
       const data = await response.json();
       if (data.status === 'success') {
@@ -976,14 +976,14 @@ function MainApp({currentUser,onLogout}){
       // Step 1: Import row baru dari Sheet ke Supabase
       const importRes = await fetch(WEB_APP_URL, {
         method: 'POST',
-        body: JSON.stringify({ action: 'importNew', projectName: pName })
+        body: JSON.stringify({ action: 'importNew', projectName: pName, token: SUPABASE_ANON_KEY })
       });
       const importData = await importRes.json();
       
       // Step 2: Sync balik Supabase ke Sheet (refresh + tambah formula)
       const syncRes = await fetch(WEB_APP_URL, {
         method: 'POST',
-        body: JSON.stringify({ action: 'sync', projectName: pName })
+        body: JSON.stringify({ action: 'sync', projectName: pName, token: SUPABASE_ANON_KEY })
       });
       const syncData = await syncRes.json();
       
