@@ -73,7 +73,7 @@ async function parseAI(history, newMsg){
   if (!apiKey) {
     throw new Error('Gemini API Key tidak terkonfigurasi. Silakan isi API Key di Settings.');
   }
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
   
   // Convert history messages to Gemini API contents structure
   const contents = [];
@@ -128,9 +128,11 @@ async function parseAI(history, newMsg){
         const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
         const listRes = await fetch(listUrl);
         if (listRes.ok) {
-          const listData = await listRes.json();
-          const modelNames = listData.models.map(m => m.name.replace('models/', '')).join(', ');
-          throw new Error(`Model gemini-3.5-flash tidak ditemukan. Model yang tersedia untuk API Key Anda: ${modelNames}`);
+          const data = await listRes.json();
+          if (!data.models.some(m => m.name === 'models/gemini-1.5-flash')) {
+            const modelNames = data.models.map(m => m.name.replace('models/', '')).join(', ');
+            throw new Error(`Model gemini-1.5-flash tidak ditemukan. Model yang tersedia untuk API Key Anda: ${modelNames}`);
+          }
         }
       } catch (e) {
         if (e.message.includes('tidak ditemukan')) {
