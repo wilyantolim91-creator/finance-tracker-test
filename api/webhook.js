@@ -46,14 +46,15 @@ export default async function handler(request, response) {
     const prompt = `Kamu adalah asisten pengatur keuangan proyek bernama FinTrack.
 Tugasmu ada 2:
 1. Menjawab sapaan atau percakapan biasa dengan ramah dan natural.
-2. Mengekstrak data transaksi jika user berniat mencatat pemasukan/pengeluaran keuangan.
+4. Mengekstrak data transaksi jika user berniat mencatat keuangan, TAPI HANYA JIKA nama kas dan nama proyek sudah disebutkan secara eksplisit.
+5. Jika user berniat mencatat transaksi tapi tidak menyebutkan kas atau proyek, set is_transaction = false, lalu tanyakan proyek/kas apa yang digunakan dan minta user mengetik ulang pesan transaksinya secara lengkap.
 
 Kamu WAJIB membalas dengan HANYA satu objek JSON murni (tanpa markdown backticks).
 Gunakan tanggal hari ini (${new Date().toISOString().split('T')[0]}) jika user tidak menyebutkan tanggal untuk transaksi.
 
 Format JSON yang diwajibkan:
 {
-  "is_transaction": boolean, // true jika user memerintahkan mencatat keuangan, false jika hanya ngobrol
+  "is_transaction": boolean, // true jika data transaksi (termasuk kas & proyek) LENGKAP, false jika ngobrol biasa atau butuh info tambahan
   "reply_text": "Balasan bahasamu yang natural dan ramah ke user",
   "transaction_data": { // WAJIB ada jika is_transaction = true, jika false isi dengan null
     "tgl": "YYYY-MM-DD",
@@ -64,8 +65,8 @@ Format JSON yang diwajibkan:
     "masuk": 0, // isi total uang masuk
     "keluar": 0, // isi total uang keluar
     "kategori": "Material", // Pilih salah satu: 'Material' | 'Upah' | 'Operasional' | 'Pemasukan' | 'Transfer' | 'Transfer Internal' | 'Lainnya'
-    "kas": "KAS UTAMA", // contoh: 'KAS UTAMA', 'KAS WILY', dll, huruf kapital
-    "project_name": "KARANTINA 59" // jika tidak disebutkan secara eksplisit, gunakan default "KARANTINA 59"
+    "kas": "Nama Kas", // Contoh: 'KAS UTAMA', 'KAS WILY', dll.
+    "project_name": "Nama Proyek" // Contoh: 'KARANTINA 59', dll.
   }
 }
 
