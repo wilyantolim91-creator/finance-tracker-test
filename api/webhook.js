@@ -39,6 +39,24 @@ export default async function handler(request, response) {
       return resData;
     };
 
+    // Fungsi untuk memberikan reaksi emoji ke pesan Telegram
+    const reactToTelegram = async (emoji) => {
+      if (!TELEGRAM_TOKEN) return;
+      try {
+        await fetch(`https://api.telegram.org/bot${cleanToken}/setMessageReaction`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            message_id: message.message_id,
+            reaction: [{ type: 'emoji', emoji: emoji }]
+          })
+        });
+      } catch (err) {
+        console.error("Gagal mengirim reaksi:", err);
+      }
+    };
+
     if (!GEMINI_API_KEY || !SUPABASE_URL || !SUPABASE_KEY || !TELEGRAM_TOKEN) {
       console.error("Missing Environment Variables!");
       await replyToTelegram("Maaf, API Keys di server belum dikonfigurasi dengan lengkap.");
@@ -53,6 +71,9 @@ export default async function handler(request, response) {
     if (!isPrivate && !isReplyToBot && !isMentioned) {
       return response.status(200).json({ status: 'ok', msg: 'Ignored group message (no mention or reply)' });
     }
+
+    // Berikan reaksi 👀 untuk menandakan bot sedang memproses pesan
+    await reactToTelegram('👀');
 
     // Bersihkan mention/username bot agar tidak mengacaukan AI
     const cleanUserText = userText.replace(/@[a-zA-Z0-9_]+/g, '').trim();
